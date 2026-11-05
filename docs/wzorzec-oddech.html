@@ -1,0 +1,388 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>TeraCanvas Oddech</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,300;0,400;1,300&family=Figtree:wght@400;500;600&display=swap">
+<style>
+/* Layout: one full-bleed living landscape (canvas); the guide floats in the sky, the words float in a lower centre column. Single dusk look by choice. */
+:root{
+  --night:#0e1b1f;
+  --mist:#e8f0ec;
+  --mist-dim:rgba(232,240,236,.7);
+  --ember:#f2d3a0;
+  --glass:rgba(12,24,28,.55);
+  --line:rgba(232,240,236,.2);
+  --f-voice:"Spectral", Georgia, "Times New Roman", serif;
+  --f-ui:"Figtree", "Segoe UI", system-ui, sans-serif;
+  --b:0;
+  color-scheme:dark;
+}
+html,body{height:100%}
+body{background:var(--night);color:var(--mist);font-family:var(--f-ui);overflow:hidden;-webkit-font-smoothing:antialiased}
+#sky{position:fixed;inset:0;width:100%;height:100%;display:block}
+
+.topbar{position:fixed;top:0;left:0;right:0;z-index:5;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;
+  padding-top:calc(env(safe-area-inset-top,0px) + 12px);
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.brand{font-family:var(--f-voice);font-size:1.05rem;letter-spacing:.01em}
+.brand small{font-family:var(--f-ui);font-size:.68rem;letter-spacing:.12em;text-transform:uppercase;color:var(--mist-dim);margin-left:8px}
+.ctrls{display:flex;gap:6px;flex-wrap:wrap}
+.pill{font:500 .8rem var(--f-ui);color:var(--mist);background:var(--glass);border:1px solid var(--line);border-radius:999px;padding:7px 12px;cursor:pointer;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+.pill[aria-pressed="true"]{background:var(--mist);color:var(--night)}
+.pill:focus-visible,.btn:focus-visible{outline:2px solid var(--ember);outline-offset:3px}
+
+.stage{position:fixed;inset:0;z-index:2;display:grid;place-items:end center;overflow-y:auto;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  padding-block:calc(env(safe-area-inset-top,0px) + 70px) calc(env(safe-area-inset-bottom,0px) + 32px);
+  transform:scale(calc(1 + var(--b) * .022));transform-origin:50% 40%}
+.scene{grid-area:1/1;width:min(100%,34rem);display:flex;flex-direction:column;align-items:center;text-align:center;gap:18px;
+  opacity:0;transform:translateY(16px);filter:blur(8px);
+  transition:opacity .8s ease,transform .9s cubic-bezier(.2,.7,.2,1),filter .8s ease}
+.scene.on{opacity:1;transform:none;filter:none}
+.calm .scene{transform:none;filter:none;transition:opacity .3s linear}
+
+.say{font-family:var(--f-voice);font-weight:300;font-size:clamp(1.4rem,4.8vw,2rem);line-height:1.28;text-wrap:balance;max-width:24ch;margin:0;text-shadow:0 2px 18px rgba(0,0,0,.35)}
+.sub{color:var(--mist-dim);font-size:.95rem;line-height:1.55;max-width:40ch;margin:0}
+.row{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+.btn{font:600 1rem var(--f-ui);padding:14px 28px;border-radius:999px;border:1px solid transparent;background:var(--mist);color:var(--night);cursor:pointer;transition:transform .3s ease,background .3s}
+.btn:hover{transform:translateY(-2px)}
+.btn.ghost{background:var(--glass);color:var(--mist);border-color:var(--line);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+
+/* tension scale */
+.scale{width:100%;display:flex;flex-direction:column;gap:10px;padding:18px 18px 14px;border-radius:20px;background:var(--glass);border:1px solid var(--line);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+.scale-val{display:flex;align-items:baseline;justify-content:center;gap:12px}
+.scale-num{font-family:var(--f-voice);font-size:2.6rem;line-height:1;font-variant-numeric:tabular-nums}
+.scale-word{color:var(--mist-dim);font-size:.9rem}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:28px;background:transparent;cursor:pointer}
+input[type=range]::-webkit-slider-runnable-track{height:6px;border-radius:6px;background:linear-gradient(90deg,#f2d3a0,#7f9c97 50%,#4a4f5e)}
+input[type=range]::-moz-range-track{height:6px;border-radius:6px;background:linear-gradient(90deg,#f2d3a0,#7f9c97 50%,#4a4f5e)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:26px;height:26px;margin-top:-10px;border-radius:50%;background:var(--mist);box-shadow:0 0 0 6px rgba(232,240,236,.15),0 0 22px rgba(242,211,160,.6)}
+input[type=range]::-moz-range-thumb{width:26px;height:26px;border:0;border-radius:50%;background:var(--mist);box-shadow:0 0 0 6px rgba(232,240,236,.15),0 0 22px rgba(242,211,160,.6)}
+input[type=range]:focus-visible{outline:2px solid var(--ember);outline-offset:4px;border-radius:8px}
+.scale-ends{display:flex;justify-content:space-between;font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;color:var(--mist-dim)}
+
+/* breathing */
+.phase{font-family:var(--f-voice);font-weight:300;font-size:clamp(2.4rem,9vw,3.4rem);line-height:1;margin:0;min-height:1em}
+.hint{color:var(--mist-dim);font-size:1rem;margin:0;min-height:1.5em}
+.count{font-variant-numeric:tabular-nums;font-size:.85rem;letter-spacing:.14em;text-transform:uppercase;color:var(--mist-dim)}
+.dots{display:flex;gap:10px}
+.dots i{width:9px;height:9px;border-radius:50%;border:1px solid var(--mist-dim);transition:background .6s}
+.dots i.done{background:var(--ember);border-color:var(--ember)}
+
+/* postcard */
+.card{width:100%;border-radius:20px;overflow:hidden;background:var(--glass);border:1px solid var(--line);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);text-align:left}
+.card-sky{height:92px;position:relative}
+.card-sky span{position:absolute;bottom:10px;font-size:.7rem;letter-spacing:.12em;text-transform:uppercase;color:rgba(14,27,31,.75);font-weight:600}
+.card-sky .l{left:16px}.card-sky .r{right:16px}
+.card-body{padding:16px 18px 18px;display:grid;gap:10px}
+.card-title{font-family:var(--f-voice);font-size:1.3rem;margin:0}
+.card-row{display:flex;justify-content:space-between;gap:12px;font-size:.92rem;color:var(--mist-dim)}
+.card-row b{color:var(--mist);font-weight:500;font-variant-numeric:tabular-nums}
+#copyFallback{white-space:pre-wrap;font-size:.8rem;background:var(--glass);padding:10px;border-radius:10px;margin:0;width:100%;text-align:left;user-select:all}
+
+/* design notes sheet */
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:8;max-height:72%;overflow-y:auto;background:rgba(10,20,23,.92);border-top:1px solid var(--line);border-radius:22px 22px 0 0;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  padding-left:max(20px,env(safe-area-inset-left,0px));padding-right:max(20px,env(safe-area-inset-right,0px));
+  padding-block:20px calc(env(safe-area-inset-bottom,0px) + 22px)}
+.sheet-in{max-width:40rem;margin:0 auto;display:grid;gap:14px}
+.sheet h2{font-family:var(--f-voice);font-weight:400;font-size:1.35rem;margin:0}
+.sheet dl{display:grid;gap:12px;margin:0}
+.sheet dt{font-size:.72rem;letter-spacing:.12em;text-transform:uppercase;color:var(--ember)}
+.sheet dd{margin:2px 0 0;line-height:1.5;color:var(--mist-dim);font-size:.92rem}
+.sheet dd b{color:var(--mist);font-weight:500}
+.note{font-size:.72rem;color:var(--mist-dim);letter-spacing:.04em}
+</style>
+
+<canvas id="sky" aria-hidden="true"></canvas>
+
+<header class="topbar">
+  <div class="brand">TeraCanvas<small>prototyp</small></div>
+  <div class="ctrls">
+    <button class="pill" id="soundBtn" aria-pressed="false">Dźwięk</button>
+    <button class="pill" id="calmBtn" aria-pressed="false">Tryb spokojny</button>
+    <button class="pill" id="notesBtn" aria-expanded="false">Jak to zbudować?</button>
+  </div>
+</header>
+
+<main class="stage">
+  <section class="scene on" data-scene="intro">
+    <p class="say">Cześć. Zatrzymajmy się na chwilę.</p>
+    <p class="sub">Poprowadzę Cię przez krótkie ćwiczenie oddechowe w rytmie 4–2–6. Zajmie około minuty i możesz przerwać w każdej chwili.</p>
+    <div class="row"><button class="btn" id="startBtn">Zaczynamy</button></div>
+    <span class="note">Włącz dźwięk u góry, jeśli masz słuchawki.</span>
+  </section>
+
+  <section class="scene" data-scene="checkin" hidden>
+    <p class="say">Jak silne jest teraz Twoje napięcie?</p>
+    <div class="scale">
+      <div class="scale-val"><span class="scale-num" id="v1">4</span><span class="scale-word" id="w1">umiarkowanie · lekka mgła</span></div>
+      <input type="range" id="tension1" min="0" max="10" step="1" value="4" aria-label="Napięcie od 0 do 10">
+      <div class="scale-ends"><span>0 · spokój</span><span>10 · bardzo silne</span></div>
+    </div>
+    <p class="sub">Zobacz, jak zmienia się niebo. To Twoja pogoda na teraz.</p>
+    <div class="row"><button class="btn" id="toBreath">Dalej</button></div>
+  </section>
+
+  <section class="scene" data-scene="breath" hidden>
+    <p class="phase" id="phase">Przygotuj się</p>
+    <p class="hint" id="hint">usiądź wygodnie, rozluźnij ramiona</p>
+    <div class="dots" id="dots" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+    <span class="count" id="count" aria-live="polite">Oddech 1 z 4</span>
+    <div class="row">
+      <button class="btn ghost" id="pauseBtn">Pauza</button>
+      <button class="btn ghost" id="skipBtn">Zakończ</button>
+    </div>
+  </section>
+
+  <section class="scene" data-scene="checkout" hidden>
+    <p class="say">Dobrze. A jak jest teraz?</p>
+    <div class="scale">
+      <div class="scale-val"><span class="scale-num" id="v2">4</span><span class="scale-word" id="w2">umiarkowanie · lekka mgła</span></div>
+      <input type="range" id="tension2" min="0" max="10" step="1" value="4" aria-label="Napięcie po ćwiczeniu, od 0 do 10">
+      <div class="scale-ends"><span>0 · spokój</span><span>10 · bardzo silne</span></div>
+    </div>
+    <div class="row"><button class="btn" id="toSummary">Zobacz podsumowanie</button></div>
+  </section>
+
+  <section class="scene" data-scene="summary" hidden>
+    <p class="say" id="sumSay">Napięcie spadło.</p>
+    <div class="card">
+      <div class="card-sky" id="cardSky"><span class="l">przed</span><span class="r">po</span></div>
+      <div class="card-body">
+        <p class="card-title">Twoja chwila oddechu</p>
+        <div class="card-row"><span>Napięcie</span><b id="sumT">7 → 4</b></div>
+        <div class="card-row"><span>Oddechy</span><b id="sumN">4 · rytm 4–2–6</b></div>
+        <div class="card-row"><span>Data</span><b id="sumD"></b></div>
+      </div>
+    </div>
+    <pre id="copyFallback" hidden></pre>
+    <div class="row">
+      <button class="btn" id="againBtn">Powtórz ćwiczenie</button>
+      <button class="btn ghost" id="copyBtn">Kopiuj podsumowanie</button>
+    </div>
+    <span class="note">Prototyp. Nic nie jest zapisywane.</span>
+  </section>
+</main>
+
+<aside class="sheet" id="sheet" hidden>
+  <div class="sheet-in">
+    <h2>Co tu działa i czym to zrobić w produkcji</h2>
+    <dl>
+      <div><dt>Krajobraz i pogoda</dt><dd>Tu: <b>Canvas 2D</b>, kolory nieba liczone z napięcia 0–10. W produkcji: Canvas lub <b>PixiJS / React Three Fiber</b>, jeśli chcesz głębi i światła 3D.</dd></div>
+      <div><dt>Przewodnik</dt><dd>Tu: kształt rysowany kodem, który oddycha, mruga i zamyka oczy przy ćwiczeniu. W produkcji: <b>Rive</b> ze state machine (stany: spokój, oddech, troska, radość).</dd></div>
+      <div><dt>Przejścia scen</dt><dd>Przewodnik płynie między scenami, a tekst rozmywa się zamiast „przeskakiwać”. W produkcji: <b>Motion</b> (layout animations) i <b>View Transitions API</b>.</dd></div>
+      <div><dt>Oddychający interfejs</dt><dd>Jedna zmienna oddechu 0→1 steruje wszystkim: rozmiarem przewodnika, skalą interfejsu, jasnością horyzontu, świetlikami i filtrem dźwięku.</dd></div>
+      <div><dt>Dźwięk</dt><dd>Tu: <b>Web Audio</b> syntetyzuje ambient i dzwonki faz. W produkcji: <b>Tone.js</b> albo nagrane pętle przez Howler.js.</dd></div>
+      <div><dt>Dostępność</dt><dd>Tryb spokojny wyłącza dryf, deszcz i rozmycia. Włącza się sam, gdy system ma ustawione ograniczenie ruchu.</dd></div>
+    </dl>
+    <div class="row"><button class="btn ghost" id="closeSheet">Zamknij</button></div>
+  </div>
+</aside>
+
+<script>
+(function(){
+const $=s=>document.querySelector(s);
+const cv=$('#sky'), ctx=cv.getContext('2d');
+let W=0,H=0,DPR=1;
+function resize(){DPR=Math.min(2,window.devicePixelRatio||1);W=innerWidth;H=innerHeight;cv.width=Math.round(W*DPR);cv.height=Math.round(H*DPR);ctx.setTransform(DPR,0,0,DPR,0,0);}
+addEventListener('resize',resize);resize();
+
+const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+const S={scene:'intro',tension:4,shown:4,before:4,after:4,calm:false,b:0,g:{x:W/2,y:H*.34,r:40},cycles:0};
+
+const CALM={top:[20,48,58],mid:[66,114,108],hor:[242,203,160],hill:[16,36,40],guide:[247,219,164]};
+const TENSE={top:[16,17,24],mid:[44,48,60],hor:[100,104,118],hill:[14,16,22],guide:[184,196,214]};
+const mix=(a,b,t)=>a.map((v,i)=>v+(b[i]-v)*t);
+const rgb=(c,a=1)=>`rgba(${c[0]|0},${c[1]|0},${c[2]|0},${a})`;
+const ease=p=>.5-.5*Math.cos(Math.PI*p);
+
+const flies=Array.from({length:70},()=>({x:Math.random(),y:Math.random()*.75,s:.6+Math.random()*1.6,ph:Math.random()*6.28,v:.006+Math.random()*.02}));
+const drops=Array.from({length:110},()=>({x:Math.random(),y:Math.random(),l:.015+Math.random()*.03,v:.35+Math.random()*.45}));
+
+function setCalm(on){S.calm=on;document.documentElement.classList.toggle('calm',on);$('#calmBtn').setAttribute('aria-pressed',String(on));}
+setCalm(reduce);
+
+/* ---------- scenes ---------- */
+function go(name){
+  const cur=document.querySelector('.scene.on'), nx=document.querySelector(`[data-scene="${name}"]`);
+  const out=S.calm?220:650, delay=cur?(S.calm?180:420):0;
+  if(cur){cur.classList.remove('on');setTimeout(()=>{if(!cur.classList.contains('on'))cur.hidden=true;},out);}
+  S.scene=name;
+  if(name==='breath')startBreath();
+  if(name==='summary')buildSummary();
+  setTimeout(()=>{nx.hidden=false;requestAnimationFrame(()=>requestAnimationFrame(()=>{nx.classList.add('on');const f=nx.querySelector('input,button');if(f)f.focus({preventScroll:true});}));},delay);
+}
+
+function words(v){
+  if(v<=2)return 'spokojnie · bezchmurnie';
+  if(v<=5)return 'umiarkowanie · lekka mgła';
+  if(v<=8)return 'wyraźnie · pochmurno';
+  return 'bardzo silnie · burza';
+}
+function bind(id,vId,wId){
+  const el=$(id);
+  const upd=()=>{const v=+el.value;S.tension=v;$(vId).textContent=v;$(wId).textContent=words(v);el.setAttribute('aria-valuetext',v+', '+words(v));};
+  el.addEventListener('input',upd);return {el,upd};
+}
+const s1=bind('#tension1','#v1','#w1'), s2=bind('#tension2','#v2','#w2');
+
+$('#startBtn').onclick=()=>{s1.upd();go('checkin');};
+$('#toBreath').onclick=()=>{S.before=S.tension;go('breath');};
+$('#toSummary').onclick=()=>{S.after=S.tension;go('summary');};
+$('#againBtn').onclick=()=>{s1.el.value=S.after;s1.upd();$('#copyFallback').hidden=true;go('checkin');};
+
+/* ---------- breathing ---------- */
+const PH=[{k:'in',d:4,l:'Wdech',h:'powoli, przez nos'},{k:'hold',d:2,l:'Zatrzymaj',h:'lekko, bez napinania'},{k:'out',d:6,l:'Wydech',h:'długo, przez usta'}];
+const CYC=12,N=4,LEAD=2;
+const br={on:false,paused:false,acc:0,last:0,key:'',phase:''};
+function startBreath(){br.on=true;br.paused=false;br.acc=0;br.last=performance.now();br.key='';br.phase='';S.cycles=0;
+  $('#pauseBtn').textContent='Pauza';$('#phase').textContent='Przygotuj się';$('#hint').textContent='usiądź wygodnie, rozluźnij ramiona';
+  $('#count').textContent='Oddech 1 z '+N;document.querySelectorAll('#dots i').forEach(d=>d.classList.remove('done'));}
+function finishBreath(){if(!br.on)return;br.on=false;s2.el.value=S.before;s2.upd();go('checkout');}
+$('#pauseBtn').onclick=()=>{br.paused=!br.paused;$('#pauseBtn').textContent=br.paused?'Wznów':'Pauza';if(br.paused){$('#hint').textContent='wstrzymane, odpocznij';br.key='';}};
+$('#skipBtn').onclick=()=>{S.cycles=Math.max(S.cycles,Math.floor(Math.max(0,br.acc-LEAD)/CYC));finishBreath();};
+
+function updateBreath(now){
+  if(S.scene!=='breath'||!br.on){S.b+=(0-S.b)*.04;br.last=now;return;}
+  if(!br.paused)br.acc+=(now-br.last)/1000;
+  br.last=now;
+  const el=br.acc-LEAD;
+  if(el<0){S.b+=(0-S.b)*.05;return;}
+  const c=Math.floor(el/CYC);
+  if(c>=N){S.cycles=N;finishBreath();return;}
+  let w=el-c*CYC,i=0;while(w>PH[i].d){w-=PH[i].d;i++;}
+  const ph=PH[i],p=Math.min(1,w/ph.d);
+  const target=ph.k==='in'?ease(p):ph.k==='hold'?1:1-ease(p);
+  S.b=br.paused?S.b:target;
+  const left=Math.max(1,Math.ceil(ph.d-w));
+  const key=c+ph.k+left;
+  if(key!==br.key&&!br.paused){
+    br.key=key;
+    if(br.phase!==c+ph.k){br.phase=c+ph.k;$('#phase').textContent=ph.l;$('#hint').textContent=ph.h;chime(ph.k==='in'?523:ph.k==='hold'?659:392);}
+    $('#count').textContent=`Oddech ${c+1} z ${N} · ${left}`;
+    document.querySelectorAll('#dots i').forEach((d,j)=>d.classList.toggle('done',j<c));
+    S.cycles=c;
+  }
+}
+
+/* ---------- summary ---------- */
+function buildSummary(){
+  const b=S.before,a=S.after,d=b-a;
+  $('#sumT').textContent=`${b} → ${a}`;
+  $('#sumN').textContent=`${S.cycles} · rytm 4–2–6`;
+  $('#sumD').textContent=new Date().toLocaleDateString('pl-PL',{day:'numeric',month:'long',year:'numeric'});
+  $('#sumSay').textContent=d>0?`Napięcie spadło o ${d} ${d===1?'punkt':d<5?'punkty':'punktów'}. Możesz wrócić do tego rytmu, kiedy zechcesz.`
+    :d===0?'Napięcie bez zmian. To też w porządku, czasem ulga przychodzi później.'
+    :'Napięcie jest teraz wyższe. Warto porozmawiać o tym z terapeutką.';
+  const cb=mix(CALM.hor,TENSE.hor,b/10),ca=mix(CALM.hor,TENSE.hor,a/10),mb=mix(CALM.mid,TENSE.mid,b/10),ma=mix(CALM.mid,TENSE.mid,a/10);
+  $('#cardSky').style.background=`linear-gradient(100deg,${rgb(mb)},${rgb(cb)} 42%,${rgb(ca)} 58%,${rgb(ma)})`;
+}
+$('#copyBtn').onclick=()=>{
+  const txt=`TeraCanvas · Chwila oddechu (${$('#sumD').textContent})\nNapięcie przed: ${S.before}/10, po: ${S.after}/10\nOddechy: ${S.cycles} (rytm 4–2–6)`;
+  const fb=()=>{const p=$('#copyFallback');p.textContent=txt;p.hidden=false;$('#copyBtn').textContent='Zaznacz tekst powyżej';};
+  try{navigator.clipboard.writeText(txt).then(()=>{$('#copyBtn').textContent='Skopiowano';setTimeout(()=>$('#copyBtn').textContent='Kopiuj podsumowanie',1800);},fb);}catch(e){fb();}
+};
+
+/* ---------- controls ---------- */
+$('#calmBtn').onclick=()=>setCalm(!S.calm);
+$('#notesBtn').onclick=()=>{const sh=$('#sheet');sh.hidden=!sh.hidden;$('#notesBtn').setAttribute('aria-expanded',String(!sh.hidden));if(!sh.hidden)$('#closeSheet').focus();};
+$('#closeSheet').onclick=()=>{$('#sheet').hidden=true;$('#notesBtn').setAttribute('aria-expanded','false');$('#notesBtn').focus();};
+
+/* ---------- sound (Web Audio) ---------- */
+let AC=null,master,filter,soundOn=false;
+function initAudio(){
+  const C=window.AudioContext||window.webkitAudioContext;if(!C)return false;
+  AC=new C();master=AC.createGain();master.gain.value=0;filter=AC.createBiquadFilter();filter.type='lowpass';filter.frequency.value=400;filter.Q.value=.7;
+  [[110,'sine',.5],[164.8,'sine',.35],[220,'triangle',.12],[329.6,'sine',.06]].forEach(([f,t,g])=>{const o=AC.createOscillator(),gn=AC.createGain();o.type=t;o.frequency.value=f;o.detune.value=(Math.random()-.5)*8;gn.gain.value=g;o.connect(gn).connect(filter);o.start();});
+  filter.connect(master).connect(AC.destination);return true;
+}
+$('#soundBtn').onclick=()=>{if(!AC&&!initAudio())return;soundOn=!soundOn;if(AC.state==='suspended')AC.resume();$('#soundBtn').setAttribute('aria-pressed',String(soundOn));};
+function audioUpdate(){if(!AC)return;const t=AC.currentTime;master.gain.setTargetAtTime(soundOn?.12+.07*S.b:0,t,.25);filter.frequency.setTargetAtTime(260+S.b*1100+(1-S.shown/10)*240,t,.12);}
+function chime(f){if(!AC||!soundOn)return;const o=AC.createOscillator(),g=AC.createGain(),t=AC.currentTime;o.type='sine';o.frequency.value=f;g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(.07,t+.04);g.gain.exponentialRampToValueAtTime(.0001,t+2.2);o.connect(g).connect(AC.destination);o.start(t);o.stop(t+2.3);}
+
+/* ---------- drawing ---------- */
+function guideTarget(){
+  const m=Math.min(W,H);
+  switch(S.scene){
+    case 'intro':return{x:W/2,y:H*.3,r:m*.075};
+    case 'checkin':case 'checkout':return{x:W/2,y:H*.2,r:m*.055};
+    case 'breath':return{x:W/2,y:H*.32,r:m*.08*(1+S.b*(S.calm?.45:.8))};
+    default:return{x:W/2,y:H*.14,r:m*.045};
+  }
+}
+function hill(baseY,amp,freq,seed,col,shift,lift){
+  ctx.beginPath();ctx.moveTo(0,H);
+  for(let x=0;x<=W+8;x+=8){const y=H*baseY+Math.sin(x*freq+seed+shift)*amp+Math.sin(x*freq*2.3+seed*1.7-shift*.6)*amp*.4-lift;ctx.lineTo(x,y);}
+  ctx.lineTo(W,H);ctx.closePath();ctx.fillStyle=col;ctx.fill();
+}
+let T=0,last=performance.now();
+function frame(now){
+  const dt=Math.min(.05,(now-last)/1000);last=now;T+=dt;
+  S.shown+=(S.tension-S.shown)*(1-Math.exp(-dt*2));
+  const t=S.shown/10,mv=S.calm?0:1;
+  updateBreath(now);
+
+  const tg=guideTarget(),k=1-Math.exp(-dt*(S.calm?7:2.4)),kr=S.scene==='breath'?1-Math.exp(-dt*14):k;
+  S.g.x+=(tg.x-S.g.x)*k;S.g.y+=(tg.y-S.g.y)*k;S.g.r+=(tg.r-S.g.r)*kr;
+  document.documentElement.style.setProperty('--b',(S.calm?0:S.b).toFixed(3));
+
+  const top=mix(CALM.top,TENSE.top,t),mid=mix(CALM.mid,TENSE.mid,t);
+  const hor=mix(mix(CALM.hor,TENSE.hor,t),[250,226,184],S.b*.18);
+  const g=ctx.createLinearGradient(0,0,0,H);g.addColorStop(0,rgb(top));g.addColorStop(.56,rgb(mid));g.addColorStop(.8,rgb(hor));g.addColorStop(1,rgb(hor));
+  ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+
+  const sun=ctx.createRadialGradient(W/2,H*.8,0,W/2,H*.8,Math.max(W,H)*.6);
+  sun.addColorStop(0,rgb(hor,.35+S.b*.25));sun.addColorStop(1,rgb(hor,0));ctx.fillStyle=sun;ctx.fillRect(0,0,W,H);
+
+  // fog grows with tension
+  if(t>.2){for(let i=0;i<3;i++){const fx=((i*.37+T*.006*mv*(i+1))%1.4-.2)*W,fy=H*(.55+i*.09),fr=Math.max(W,H)*.45;
+    const fg=ctx.createRadialGradient(fx,fy,0,fx,fy,fr);fg.addColorStop(0,`rgba(190,198,206,${(t-.2)*.22})`);fg.addColorStop(1,'rgba(190,198,206,0)');ctx.fillStyle=fg;ctx.fillRect(0,0,W,H);}}
+
+  // fireflies, drawn toward the guide as you inhale
+  const fa=Math.max(0,1-t*1.1);
+  if(fa>0){for(const f of flies){
+    if(mv){f.y-=f.v*dt;f.x+=Math.sin(T*.4+f.ph)*.0006;if(f.y<-.02){f.y=.78;f.x=Math.random();}}
+    let px=f.x*W,py=f.y*H;px+=(S.g.x-px)*S.b*.14;py+=(S.g.y-py)*S.b*.14;
+    const tw=.5+.5*Math.sin(T*1.3+f.ph*3);const a=fa*(.25+.6*tw);
+    ctx.fillStyle=`rgba(247,222,170,${a*.18})`;ctx.beginPath();ctx.arc(px,py,f.s*4,0,6.283);ctx.fill();
+    ctx.fillStyle=`rgba(252,236,200,${a})`;ctx.beginPath();ctx.arc(px,py,f.s,0,6.283);ctx.fill();}}
+
+  // hills
+  const hc=mix(CALM.hill,TENSE.hill,t);
+  hill(.74,H*.04,.006,1.2,rgb(mix(hc,mid,.45)),T*.012*mv,S.b*6*mv);
+  hill(.82,H*.035,.009,4.1,rgb(mix(hc,mid,.22)),T*.02*mv,S.b*9*mv);
+  hill(.9,H*.03,.012,7.7,rgb(hc),T*.03*mv,S.b*12*mv);
+
+  // rain when tense
+  if(t>.55&&mv){ctx.strokeStyle=`rgba(200,210,222,${(t-.55)*.55})`;ctx.lineWidth=1;ctx.beginPath();
+    const n=Math.round(drops.length*(t-.55)/.45);
+    for(let i=0;i<n;i++){const d=drops[i];d.y+=d.v*dt;d.x+=d.v*dt*.12;if(d.y>1){d.y=-.05;d.x=Math.random();}
+      const x=d.x*W,y=d.y*H;ctx.moveTo(x,y);ctx.lineTo(x+d.l*H*.12,y+d.l*H);}ctx.stroke();}
+
+  drawGuide(t,mv);
+  audioUpdate();
+  requestAnimationFrame(frame);
+}
+function drawGuide(t,mv){
+  const {x,y,r}=S.g,col=mix(CALM.guide,TENSE.guide,t);
+  const glow=ctx.createRadialGradient(x,y,r*.3,x,y,r*(3+S.b*1.2));
+  glow.addColorStop(0,rgb(col,.42+S.b*.2));glow.addColorStop(1,rgb(col,0));ctx.fillStyle=glow;ctx.beginPath();ctx.arc(x,y,r*(3+S.b*1.2),0,6.283);ctx.fill();
+  ctx.beginPath();
+  const sp=1+t*1.4;
+  for(let i=0;i<=72;i++){const a=i/72*6.283;const rr=r*(1+mv*(.05*Math.sin(3*a+T*1.1*sp)+.035*Math.sin(5*a-T*1.7*sp)+.02*Math.sin(2*a+T*.5)));
+    const px=x+Math.cos(a)*rr,py=y+Math.sin(a)*rr*(.96+.04*Math.sin(T*.8*mv));i?ctx.lineTo(px,py):ctx.moveTo(px,py);}
+  const body=ctx.createRadialGradient(x-r*.3,y-r*.35,r*.1,x,y,r*1.1);body.addColorStop(0,'rgba(255,250,238,1)');body.addColorStop(1,rgb(col));
+  ctx.fillStyle=body;ctx.fill();
+  // eyes: closed during breathing, blinking otherwise
+  const ex=r*.3,ey=y-r*.06,es=r*.075;ctx.fillStyle=ctx.strokeStyle='rgba(14,27,31,.72)';
+  if(S.scene==='breath'){ctx.lineWidth=Math.max(1.5,r*.045);ctx.lineCap='round';
+    for(const s of[-1,1]){ctx.beginPath();ctx.arc(x+s*ex,ey-es*.6,es*1.3,.2*Math.PI,.8*Math.PI);ctx.stroke();}}
+  else{const bp=T%4.3,open=bp<.16?Math.abs(bp-.08)/.08:1;
+    for(const s of[-1,1]){ctx.beginPath();ctx.ellipse(x+s*ex,ey,es,Math.max(.6,es*1.25*open),0,0,6.283);ctx.fill();}}
+}
+requestAnimationFrame(frame);
+})();
+</script>
+
+</body></html>

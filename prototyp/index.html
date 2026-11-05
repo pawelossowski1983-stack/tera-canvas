@@ -1,0 +1,1181 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>TeraCanvas – prototyp</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,300;0,400;1,300&family=Figtree:wght@400;500;600&display=swap">
+
+<!-- ===================== STYLE ===================== -->
+<style>
+:root{
+  --night:#0e1b1f;
+  --mist:#e8f0ec;
+  --mist-dim:rgba(232,240,236,.78);
+  --ember:#f2d3a0;
+  --glass:rgba(12,24,28,.55);
+  --glass-strong:rgba(12,24,28,.74);
+  --sheet:rgba(10,20,23,.92);
+  --line:rgba(232,240,236,.2);
+  --ok:#9fd4b0;
+  --err:#f0a79a;
+  --f-voice:"Spectral",Georgia,"Times New Roman",serif;
+  --f-ui:"Figtree","Segoe UI",system-ui,sans-serif;
+  --ease:cubic-bezier(.2,.7,.2,1);
+  --b:0;
+  --top:68px;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--night);color:var(--mist);font:400 16px/1.5 var(--f-ui);overflow:hidden;-webkit-font-smoothing:antialiased}
+button,input,textarea{font:inherit;color:inherit}
+h1,h2,h3,p,ul,ol,dl,dd{margin:0;padding:0}
+ul,ol{list-style:none}
+[hidden]{display:none!important}
+
+/* Górny pasek */
+.topbar{position:fixed;top:0;left:0;right:0;z-index:10;display:flex;align-items:center;justify-content:space-between;gap:8px 12px;flex-wrap:wrap;padding:12px 16px}
+.brand{font:400 1.15rem var(--f-voice);text-shadow:0 1px 12px rgba(0,0,0,.6)}
+.ctrls{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.pill{min-height:44px;min-width:44px;padding:8px 14px;font-weight:500;background:var(--glass);border:1px solid var(--line);border-radius:999px;cursor:pointer;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);transition:background .4s,color .4s,border-color .4s}
+.pill:hover:not(:disabled){border-color:var(--ember)}
+.pill[aria-pressed="true"]{background:var(--mist);color:var(--night)}
+.pill:disabled{opacity:.45;cursor:not-allowed}
+.seg{display:flex;background:var(--glass);border:1px solid var(--line);border-radius:999px;padding:2px;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+.seg button{min-height:40px;padding:6px 14px;border:0;border-radius:999px;background:transparent;font-weight:500;cursor:pointer;transition:background .4s,color .4s}
+.seg button[aria-pressed="true"]{background:var(--mist);color:var(--night)}
+body.dual .seg{display:none}
+:focus-visible{outline:2px solid var(--ember);outline-offset:3px}
+
+/* Widoki (terapeuta / pacjent) */
+.panes{display:flex;height:100vh;height:100dvh}
+.pane{position:relative;flex:1;min-width:0;display:none;grid-template-rows:auto minmax(0,1fr) auto auto;overflow:hidden}
+.pane.show{display:grid}
+body.dual .pane{display:grid}
+body.dual .pane+.pane{border-left:1px solid var(--line)}
+.pane canvas{position:absolute;inset:0;width:100%;height:100%;display:block;z-index:0}
+.pane>*:not(canvas){position:relative;z-index:1}
+
+.hud{padding:var(--top) 16px 0;display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;min-height:var(--top)}
+.pane-label{display:none;font-weight:600;color:var(--ember)}
+body.dual .pane-label{display:block}
+.prog-text{font-weight:500;text-shadow:0 1px 10px rgba(0,0,0,.7)}
+.dots{display:flex;gap:6px}
+.dots i{width:8px;height:8px;border-radius:50%;border:1px solid var(--mist-dim);transition:background .8s,border-color .8s}
+.dots i.done{background:var(--ember);border-color:var(--ember)}
+.dots i.now{background:var(--mist);border-color:var(--mist);box-shadow:0 0 10px var(--ember)}
+
+.body{display:grid;grid-template-columns:minmax(0,1fr) auto;min-height:0}
+.stage{overflow-y:auto;overflow-anchor:none;display:flex;justify-content:center;transform:scale(calc(1 + var(--b)*.018));transform-origin:50% 40%;scrollbar-width:thin;scrollbar-color:var(--line) transparent}
+.scene{width:min(100%,34rem);padding:var(--gs,88px) 16px 28px;display:flex;flex-direction:column;gap:14px;transition:opacity .5s ease,transform .6s var(--ease),filter .5s ease;align-self:flex-start}
+.scene.hot{--gs:104px}
+.scene.hero{--gs:max(30vh,190px);text-align:center;align-items:center}
+.scene.hero.breath{--gs:max(38vh,230px)}
+.scene.out{opacity:0;transform:translateY(16px);filter:blur(8px)}
+.calm .scene{transition:opacity .3s linear}
+.calm .scene.out{transform:none;filter:none}
+.calm .stage{transform:none}
+
+.say{font:300 clamp(1.3rem,1.05rem + 1vw,1.75rem)/1.28 var(--f-voice);text-align:center;text-wrap:balance;text-shadow:0 1px 4px rgba(0,0,0,.65),0 2px 22px rgba(0,0,0,.65);outline:none}
+.sub{color:var(--mist);line-height:1.55;text-align:center;text-shadow:0 1px 8px rgba(0,0,0,.8)}
+.card{background:var(--glass-strong);border:1px solid var(--line);border-radius:20px;padding:16px;display:flex;flex-direction:column;gap:12px;-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+.calm .card,.calm .pill:not([aria-pressed="true"]),.calm .seg{-webkit-backdrop-filter:none;backdrop-filter:none;background:rgba(12,24,28,.88)}
+.row{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+.btn{min-height:48px;padding:12px 26px;font-weight:600;border-radius:999px;border:1px solid transparent;background:var(--mist);color:var(--night);cursor:pointer;transition:transform .4s var(--ease),background .4s,opacity .4s}
+.btn:hover:not(:disabled){transform:translateY(-2px);background:#fff}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.ghost{background:var(--glass-strong);color:var(--mist);border-color:var(--line)}
+.btn.ghost:hover:not(:disabled){background:var(--glass-strong);border-color:var(--ember)}
+.calm .btn:hover{transform:none}
+.label{font-weight:500;display:block}
+.hintline{color:var(--mist-dim)}
+input[type=text],textarea{width:100%;min-height:48px;padding:12px 14px;background:rgba(6,14,17,.55);border:1px solid var(--line);border-radius:14px;transition:border-color .4s}
+textarea{min-height:104px;resize:vertical;line-height:1.5}
+input[type=text]::placeholder,textarea::placeholder{color:rgba(232,240,236,.62)}
+input[type=text]:focus,textarea:focus{border-color:var(--ember);outline:none}
+input.bad{border-color:var(--err)}
+.add{display:flex;gap:8px}
+.add input{flex:1;min-width:0}
+.add .btn{white-space:nowrap;padding-inline:18px}
+.err{color:var(--err);font-weight:500}
+.empty{color:var(--mist-dim);text-align:center;padding:10px 6px;font:italic 300 1.1rem var(--f-voice)}
+.badge{align-self:center;color:var(--mist-dim);font-size:1rem;text-align:center}
+
+/* Myśli jako obiekty */
+.bubbles{display:flex;flex-direction:column;gap:10px}
+.bubble{position:relative;background:var(--glass-strong);border:1px solid var(--line);border-radius:22px;padding:10px 8px 8px 18px;animation:bob 7s ease-in-out infinite;animation-delay:var(--d,0s)}
+.bubble .top{display:flex;gap:8px;align-items:center;justify-content:space-between}
+.bubble .t{font:400 1.1rem/1.35 var(--f-voice);overflow-wrap:anywhere}
+.fresh{animation:rise .8s var(--ease) both}
+.fresh.bubble{animation:rise .8s var(--ease) both,bob 7s ease-in-out .8s infinite}
+@keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
+@keyframes rise{from{opacity:0;transform:translateY(14px) scale(.96);filter:blur(5px)}to{opacity:1;transform:none;filter:none}}
+.calm .bubble,.calm .fresh{animation:none}
+.x{flex:none;width:44px;height:44px;display:grid;place-items:center;background:transparent;border:0;border-radius:50%;cursor:pointer;color:var(--mist-dim)}
+.x:hover{color:var(--mist);background:rgba(232,240,236,.08)}
+.pickable{width:100%;text-align:left;min-height:56px;padding:12px 18px;background:var(--glass-strong);border:1px solid var(--line);border-radius:22px;cursor:pointer;font:400 1.1rem/1.35 var(--f-voice);transition:border-color .5s,box-shadow .5s;overflow-wrap:anywhere}
+.pickable:hover{border-color:var(--ember)}
+.pickable[aria-checked="true"]{border-color:var(--ember);box-shadow:0 0 0 1px var(--ember),0 0 26px rgba(242,211,160,.35)}
+.hotchip{position:sticky;top:6px;z-index:2;background:#0d1a1e;border:1px solid var(--ember);border-radius:16px;padding:8px 14px;display:flex;flex-direction:column;gap:0}
+.hotchip small{font-size:1rem;color:var(--ember);font-weight:500}
+.hotchip span{font:400 1.05rem/1.35 var(--f-voice);overflow-wrap:anywhere}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{min-height:44px;padding:8px 16px;background:rgba(6,14,17,.5);border:1px solid var(--line);border-radius:999px;cursor:pointer;transition:background .4s,color .4s,border-color .4s}
+.chip:hover{border-color:var(--ember)}
+.chip[aria-pressed="true"]{background:var(--ember);color:var(--night);border-color:var(--ember);font-weight:500}
+.emo{display:flex;flex-direction:column;gap:2px}
+.emo .h{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+.num{font:400 1.7rem/1 var(--f-voice);font-variant-numeric:tabular-nums}
+.sky-word{color:var(--ember);text-align:center;font-weight:500}
+.ptlist{display:flex;flex-direction:column;gap:6px}
+.ptlist li{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:2px 2px 2px 12px;background:rgba(6,14,17,.45);border-radius:14px;overflow-wrap:anywhere}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.two h3{font-weight:600;font-size:1rem;margin-bottom:6px}
+.two li{padding:6px 10px;background:rgba(6,14,17,.45);border-radius:12px;margin-bottom:6px;overflow-wrap:anywhere}
+details>summary{cursor:pointer;min-height:44px;display:flex;align-items:center;gap:8px;font-weight:500;border-radius:10px}
+details>summary::-webkit-details-marker{display:none}
+details>summary::before{content:"";width:8px;height:8px;border-right:2px solid var(--ember);border-bottom:2px solid var(--ember);transform:rotate(-45deg);transition:transform .4s var(--ease);flex:none}
+details[open]>summary::before{transform:rotate(45deg)}
+details li{padding:3px 0;color:var(--mist)}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:44px;background:transparent;cursor:pointer;margin:0}
+input[type=range]::-webkit-slider-runnable-track{height:6px;border-radius:6px;background:linear-gradient(90deg,#f2d3a0,#7f9c97 50%,#4a4f5e)}
+input[type=range]::-moz-range-track{height:6px;border-radius:6px;background:linear-gradient(90deg,#f2d3a0,#7f9c97 50%,#4a4f5e)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:26px;height:26px;margin-top:-10px;border-radius:50%;background:var(--mist);box-shadow:0 0 0 6px rgba(232,240,236,.15),0 0 22px rgba(242,211,160,.6)}
+input[type=range]::-moz-range-thumb{width:26px;height:26px;border:0;border-radius:50%;background:var(--mist);box-shadow:0 0 0 6px rgba(232,240,236,.15),0 0 22px rgba(242,211,160,.6)}
+.ends{display:flex;justify-content:space-between;color:var(--mist-dim)}
+.barrow{display:grid;grid-template-columns:3.2rem 1fr 2.4rem;gap:8px;align-items:center}
+.bar-t{height:10px;border-radius:6px;background:rgba(232,240,236,.12);overflow:hidden}
+.bar-t i{display:block;height:100%;border-radius:6px;transition:width .6s var(--ease)}
+.bar-t i.b{background:#7f9c97}.bar-t i.a{background:var(--ember)}
+.sheetrow{display:grid;grid-template-columns:minmax(7rem,auto) 1fr;gap:4px 12px}
+.sheetrow dt{color:var(--ember);font-weight:500}
+.sheetrow dd{overflow-wrap:anywhere}
+.linkbox{font-weight:500;word-break:break-all;background:rgba(6,14,17,.55);border-radius:12px;padding:10px 14px;text-align:center}
+.status{display:flex;align-items:center;justify-content:center;gap:8px;font-weight:500}
+.status i{width:10px;height:10px;border-radius:50%;background:var(--mist-dim)}
+.status.on i{background:var(--ok);box-shadow:0 0 10px var(--ok)}
+.status.on{color:var(--ok)}
+.phase{font:300 clamp(2.2rem,6vw,3.2rem)/1 var(--f-voice);min-height:1em;text-shadow:0 2px 18px rgba(0,0,0,.6)}
+.scale-num{font:400 2.6rem/1 var(--f-voice);text-align:center;font-variant-numeric:tabular-nums}
+.post-sky{height:92px;border-radius:14px;position:relative}
+.post-sky span{position:absolute;bottom:8px;font-weight:600;color:var(--mist);text-shadow:0 1px 6px rgba(0,0,0,.85)}
+.post-sky .l{left:12px}.post-sky .r{right:12px}
+
+/* Panel terapeuty */
+.panel{width:288px;background:var(--sheet);border-left:1px solid var(--line);overflow-y:auto;padding:12px 14px;display:flex;flex-direction:column;gap:14px;margin-top:8px;border-top-left-radius:18px;scrollbar-width:thin;scrollbar-color:var(--line) transparent}
+.panel h2{font:600 1rem var(--f-ui);color:var(--ember)}
+.panel .only{color:var(--mist-dim)}
+.panel .tip{font:400 1.05rem/1.4 var(--f-voice)}
+.panel li{padding:2px 0}
+.jump button{width:100%;min-height:44px;text-align:left;background:transparent;border:0;border-radius:10px;padding:6px 8px;cursor:pointer;display:flex;gap:8px;align-items:center}
+.jump button:hover{background:rgba(232,240,236,.08)}
+.jump button[aria-current="step"]{background:rgba(242,211,160,.16);color:var(--ember);font-weight:600}
+.jump b{font-weight:500;width:1.1em;color:var(--mist-dim);flex:none}
+.panel-close{display:none;align-self:flex-end}
+.panel-open{display:none}
+
+/* Dolny pasek */
+.bar{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 16px;flex-wrap:wrap;background:linear-gradient(transparent,rgba(8,16,19,.72) 45%)}
+.bar:empty{display:none}
+.bar .grp{display:flex;gap:8px;flex-wrap:wrap}
+.bar .btn{min-height:44px;padding:8px 22px}
+.bar .msg{width:100%;text-align:center;color:var(--mist);text-shadow:0 1px 8px #000;font-style:italic;font-family:var(--f-voice);font-size:1.08rem}
+.foot{text-align:center;font-size:.8125rem;color:var(--mist-dim);padding:0 8px 4px;background:rgba(8,16,19,.72)}
+
+/* Komunikaty */
+.toast{position:fixed;left:50%;top:calc(var(--top) + 8px);transform:translate(-50%,10px);z-index:30;max-width:min(92vw,30rem);padding:12px 18px;border-radius:16px;background:var(--sheet);border:1px solid var(--ember);opacity:0;pointer-events:none;transition:opacity .5s,transform .5s var(--ease);text-align:center}
+.toast.on{opacity:1;transform:translate(-50%,0)}
+dialog{background:var(--sheet);color:var(--mist);border:1px solid var(--line);border-radius:20px;padding:20px;max-width:min(92vw,26rem)}
+dialog::backdrop{background:rgba(6,12,14,.6)}
+dialog h2{font:400 1.35rem var(--f-voice);margin-bottom:8px}
+dialog .row{margin-top:16px}
+
+/* Mapa */
+#mapa{position:fixed;inset:0;z-index:20;overflow-y:auto;background:var(--night);padding:24px 16px 48px}
+#mapa .in{max-width:44rem;margin:0 auto;display:flex;flex-direction:column;gap:20px}
+#mapa h1{font:400 1.8rem var(--f-voice)}
+#mapa h2{font:600 1.05rem var(--f-ui);color:var(--ember);margin-bottom:6px}
+#mapa a{color:var(--mist);display:inline-flex;align-items:center;min-height:44px;padding:0 4px}
+#mapa .links{display:grid;grid-template-columns:repeat(auto-fill,minmax(14rem,1fr));gap:0 12px}
+#mapa .scn{display:flex;flex-direction:column;gap:6px;padding:12px 0;border-top:1px solid var(--line)}
+#mapa .scn .btn{align-self:flex-start}
+
+/* Telefon i wąskie okno */
+@media (max-width:719px){
+  .topbar{padding:8px 10px}
+  .brand{font-size:1rem}
+  .pill{padding:6px 10px}
+  .seg button{padding:6px 10px}
+  .body{grid-template-columns:minmax(0,1fr)}
+  .panel{position:absolute;inset:auto 0 0 0;width:auto;max-height:78%;z-index:6;border-left:0;border-top:1px solid var(--line);border-radius:20px 20px 0 0;transform:translateY(102%);visibility:hidden;transition:transform .6s var(--ease),visibility .6s}
+  .pane.panel-on .panel{transform:none;visibility:visible}
+  .body{position:relative}
+  .panel-close,.panel-open{display:inline-flex;align-items:center}
+  .two{grid-template-columns:1fr}
+  .bar .btn{padding-inline:16px}
+  .add{flex-direction:column}
+}
+
+/* Druk: PDF generowany przez przeglądarkę */
+#print{display:none}
+@media print{
+  body{background:#fff;color:#111;overflow:visible;font:12pt/1.45 Georgia,serif}
+  .topbar,.panes,.toast,#mapa,dialog{display:none!important}
+  #print{display:block}
+  #print h1{font-size:18pt;margin:0 0 4pt}
+  #print h2{font-size:13pt;margin:14pt 0 4pt}
+  #print dt{font-weight:bold;margin-top:6pt}
+  #print dd{margin:0}
+  #print .n{color:#555}
+}
+</style>
+</head>
+<body>
+
+<header class="topbar" id="topbar">
+  <div class="brand">TeraCanvas</div>
+  <div class="ctrls">
+    <div class="seg" role="group" aria-label="Widok">
+      <button id="roleT" aria-pressed="true">Terapeuta</button>
+      <button id="roleP" aria-pressed="false">Pacjent</button>
+    </div>
+    <button class="pill" id="soundBtn" aria-pressed="false">Dźwięk</button>
+    <button class="pill" id="calmBtn" aria-pressed="false">Tryb spokojny</button>
+  </div>
+</header>
+
+<div class="panes" id="panes">
+  <section class="pane show" id="pane-therapist" data-role="therapist" aria-label="Widok terapeuty"></section>
+  <section class="pane" id="pane-patient" data-role="patient" aria-label="Widok pacjenta"></section>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<dialog id="endDialog" aria-labelledby="endTitle">
+  <h2 id="endTitle">Zakończyć sesję?</h2>
+  <p>Link dla pacjenta przestanie działać. Przed zakończeniem możesz jeszcze pobrać podsumowanie.</p>
+  <div class="row">
+    <button class="btn ghost" data-dlg="no">Wróć do sesji</button>
+    <button class="btn" data-dlg="yes">Zakończ sesję</button>
+  </div>
+</dialog>
+
+<div id="mapa" hidden></div>
+<div id="print"></div>
+
+<script>
+/* ===================== DANE PRZYKŁADOWE =====================
+   Tu możesz podmienić wszystkie treści prototypu.
+   Instrukcje i wskazówki etapów pochodzą z docs/workflow-analiza-mysli.md.
+   Emocje, pytania pomocnicze, zniekształcenia i przykładowa sytuacja są
+   treściami przykładowymi, do weryfikacji merytorycznej. */
+const DATA={
+  roomLink:'https://teracanvas.example/s/k7f2m9',
+  stages:[
+    {name:'Wprowadzenie',patient:'Przyjrzymy się jednej sytuacji i myślom, które się wtedy pojawiły. To, co wpiszesz, widzi tylko Twój terapeuta, a dane znikają po 24 godzinach.',tip:'Wyjaśnij cel ćwiczenia i podkreśl, że nie ma złych odpowiedzi.'},
+    {name:'Sytuacja',patient:'Opisz krótko sytuację: kiedy i gdzie to było, kto był obok, co się stało. Możesz też opisać zmianę samopoczucia.',tip:'Pilnuj opisu faktów bez interpretacji, np. „szef przeszedł obok bez słowa” zamiast „szef mnie zlekceważył”.'},
+    {name:'Myśli automatyczne',patient:'Jakie myśli lub obrazy pojawiły się w Twojej głowie? Wpisz każdą osobno.',tip:'Pytaj: „Co przemknęło Ci przez głowę?”, „Co to o Tobie mówi?”. Obrazy też się liczą.'},
+    {name:'Gorąca myśl',patient:'Którą z tych myśli chcesz się zająć? Wybierz tę, która najmocniej wpływa na Twoje samopoczucie.',tip:'Pomóż wybrać myśl z najsilniejszym ładunkiem emocjonalnym. Dalsze etapy dotyczą tylko jej.'},
+    {name:'Emocje i reakcje',patient:'Co wtedy czułeś? Oceń siłę każdej emocji od 0 do 100. Co działo się w ciele i co zrobiłeś?',tip:'Oddzielaj emocje od myśli: „czuję, że jestem głupi” to myśl, nie emocja.'},
+    {name:'Argumenty potwierdzające',patient:'Jakie fakty przemawiają za tym, że ta myśl jest prawdziwa?',tip:'Przyjmij argumenty bez oceniania. Pomóż odróżnić fakty od odczuć.'},
+    {name:'Argumenty podważające',patient:'Jakie fakty nie pasują do tej myśli? Co powiedziałbyś przyjacielowi w takiej sytuacji?',tip:'Sedno ćwiczenia. Użyj pytań pomocniczych; opcjonalnie pokaż karty zniekształceń poznawczych.'},
+    {name:'Myśli alternatywne',patient:'Biorąc pod uwagę argumenty z obu stron, jak inaczej można spojrzeć na tę sytuację?',tip:'Myśl ma być realistyczna, nie tylko pozytywna. Obok widać gorącą myśl i obie listy argumentów.'},
+    {name:'Emocje ponownie',patient:'Oceń jeszcze raz siłę tych samych emocji. Czy coś zmieniło się w ciele albo w tym, co chcesz zrobić?',tip:'Brak spadku nasilenia to też informacja do omówienia, nie porażka.'},
+    {name:'Podsumowanie',patient:'Oto cała Twoja praca w jednym miejscu, każda sytuacja w osobnym wierszu. Możesz ją pobrać jako PDF.',tip:'Omów podsumowanie. Dodaj kolejną sytuację albo wyeksportuj wynik i zakończ sesję.'}
+  ],
+  helpers:{
+    1:['Kiedy i gdzie to było?','Kto był obok?','Co dokładnie się stało?','Czy coś zmieniło się w Twoim samopoczuciu?'],
+    2:['Co przemknęło Ci przez głowę?','Co to o Tobie mówi?','Czy pojawił się jakiś obraz?'],
+    6:['Czy zdarzyło się kiedyś inaczej?','Co powiedziałbyś przyjacielowi w takiej sytuacji?','Czy jest fakt, którego ta myśl nie bierze pod uwagę?','Jak spojrzysz na to za rok?'],
+    7:['Co najbardziej realistycznie opisuje tę sytuację?','Co powiedziałaby osoba, która dobrze Ci życzy?']
+  },
+  emotions:['Lęk','Smutek','Złość','Wstyd','Poczucie winy','Napięcie','Bezradność'],
+  distortions:[
+    {n:'Katastrofizacja',d:'zakładanie najgorszego scenariusza'},
+    {n:'Czytanie w myślach',d:'pewność, co myślą inni, bez sprawdzenia'},
+    {n:'Myślenie czarno-białe',d:'wszystko albo nic, bez odcieni'},
+    {n:'Nadmierne uogólnianie',d:'jedno zdarzenie jako reguła na zawsze'},
+    {n:'Personalizacja',d:'branie na siebie tego, co ma inne przyczyny'},
+    {n:'Etykietowanie',d:'ocena całej osoby jednym słowem'}
+  ],
+  sample:{
+    situation:'Wtorek rano, biuro. Szef przeszedł obok mojego biurka bez słowa. Byłem sam przy stanowisku, chwilę wcześniej wysłałem mu raport.',
+    thoughts:['Szef jest ze mnie niezadowolony','Znowu coś zawaliłem','Zaraz mnie zwolnią'],
+    hot:0,
+    emotions:[['Lęk',75,45],['Wstyd',60,30],['Smutek',40,25]],
+    body:'Ścisk w żołądku, napięte ramiona.',
+    behavior:'Przez godzinę sprawdzałem raport, zamiast pracować dalej.',
+    pro:['Nie odpisał wczoraj na moją wiadomość'],
+    con:['Szef pochwalił mój raport w zeszłym tygodniu','Tego ranka spieszył się na spotkanie'],
+    alt:'Szef mógł być zajęty. Jego milczenie nie musi mieć związku ze mną ani z raportem.'
+  }
+};
+
+/* ===================== STAN (tylko w pamięci strony) ===================== */
+let uid=1;
+const newSit=()=>({situation:'',thoughts:[],hotId:null,emotions:[],body:'',behavior:'',pro:[],con:[],distortions:[],alt:'',altBelief:50,afterNote:''});
+const newBr=()=>({step:'intro',before:4,after:4,cycles:0,on:false,paused:false,acc:0,last:0,key:'',phase:''});
+const S={role:'therapist',screen:'start',room:false,patientIn:false,understood:false,sit:newSit(),rows:[],drafts:{thought:'',pro:'',con:'',other:''},errors:{},open:{},fresh:null,prev:'etap-0',ended:false,br:newBr(),panel:false};
+function resetAll(){Object.assign(S,{room:false,patientIn:false,understood:false,sit:newSit(),rows:[],drafts:{thought:'',pro:'',con:'',other:''},errors:{},open:{},fresh:null,prev:'etap-0',ended:false,br:newBr()});}
+function loadSample(){
+  const d=DATA.sample,s=newSit();
+  s.situation=d.situation;
+  s.thoughts=d.thoughts.map(t=>({id:uid++,text:t,belief:70}));
+  s.hotId=s.thoughts[d.hot].id;
+  s.emotions=d.emotions.map(e=>({id:uid++,name:e[0],before:e[1],after:null}));
+  s.body=d.body;s.behavior=d.behavior;
+  s.pro=d.pro.map(t=>({id:uid++,text:t}));
+  s.con=[];
+  S.sit=s;S.room=true;S.patientIn=true;S.understood=true;
+}
+
+/* ===================== NARZĘDZIA ===================== */
+const $=s=>document.querySelector(s);
+const $$=s=>[...document.querySelectorAll(s)];
+const esc=t=>String(t).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const stageNo=()=>{const m=/^etap-(\d)$/.exec(S.screen);return m?+m[1]:-1;};
+const hot=()=>S.sit.thoughts.find(t=>t.id===S.sit.hotId)||null;
+const emoById=id=>S.sit.emotions.find(e=>e.id==id);
+const X_ICON='<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 3l10 10M13 3L3 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
+function skyWord(v){return v<=30?'bezchmurnie, świetliki':v<=65?'mgła i chmury':'deszcz';}
+function maxOf(key){const e=S.sit.emotions;return e.length?Math.max(...e.map(x=>x[key]==null?x.before:x[key])):null;}
+function phaseDelay(id,period){return -(((performance.now()/1000)+id*1.7)%period).toFixed(2)+'s';}
+let toastT;
+function toast(msg){const t=$('#toast');t.textContent=msg;t.classList.add('on');clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('on'),3200);}
+
+/* ===================== EKRANY ===================== */
+function hotChip(){
+  const h=hot();
+  return `<div class="hotchip"><small>Gorąca myśl</small><span>${h?esc(h.text):'Jeszcze nie wybrano gorącej myśli.'}</span></div>`;
+}
+function say(n){return `<p class="say" tabindex="-1">${esc(DATA.stages[n].patient)}</p>`;}
+function det(key,title,inner){return `<details data-open="${key}" ${S.open[key]?'open':''}><summary><span>${title}</span></summary>${inner}</details>`;}
+function helpers(n){return `<ul>${DATA.helpers[n].map(q=>`<li>${esc(q)}</li>`).join('')}</ul>`;}
+function addBox(role,draft,act,btn,ph,label){
+  const err=S.errors[draft];
+  return `<label class="label" for="${role}-${draft}">${label}</label><div class="add">
+    <input type="text" id="${role}-${draft}" class="${err?'bad':''}" data-bind="drafts.${draft}" data-enter="${act}" value="${esc(S.drafts[draft])}" placeholder="${esc(ph)}" autocomplete="off">
+    <button class="btn ${role==='patient'?'':'ghost'}" data-act="${act}">${btn}</button></div>
+    ${err?`<p class="err" role="alert">${esc(err)}</p>`:''}`;
+}
+function ptList(list,kind){
+  return list.length?`<ul class="ptlist">${list.map(a=>`<li class="${S.fresh===a.id?'fresh':''}"><span>${esc(a.text)}</span><button class="x" data-act="del-${kind}" data-arg="${a.id}" aria-label="Usuń: ${esc(a.text)}">${X_ICON}</button></li>`).join('')}</ul>`:'';
+}
+function chart(){
+  return S.sit.emotions.map(e=>{const a=e.after==null?e.before:e.after;return `<div class="emo"><span class="label">${esc(e.name)}</span>
+    <div class="barrow"><span>Przed</span><div class="bar-t"><i class="b" style="width:${e.before}%"></i></div><span>${e.before}</span></div>
+    <div class="barrow"><span>Po</span><div class="bar-t"><i class="a" style="width:${a}%"></i></div><span>${a}</span></div></div>`;}).join('');
+}
+function situationRows(){
+  const rows=S.rows.slice();rows.push(S.sit);return rows;
+}
+function rowHtml(s,i){
+  const h=s.thoughts.find(t=>t.id===s.hotId);
+  const list=a=>a.length?esc(a.map(x=>x.text).join('; ')):'—';
+  const em=s.emotions.length?s.emotions.map(e=>`${esc(e.name)} ${e.before}${e.after==null?'':' → '+e.after}`).join(', '):'—';
+  return `<div class="card"><p class="label">Sytuacja ${i+1}</p><dl class="sheetrow">
+    <dt>Sytuacja</dt><dd>${s.situation?esc(s.situation):'—'}</dd>
+    <dt>Myśli</dt><dd>${list(s.thoughts)}</dd>
+    <dt>Gorąca myśl</dt><dd>${h?esc(h.text):'—'}</dd>
+    <dt>Emocje</dt><dd>${em}</dd>
+    <dt>Ciało i zachowanie</dt><dd>${esc([s.body,s.behavior].filter(Boolean).join(' ')||'—')}</dd>
+    <dt>Za</dt><dd>${list(s.pro)}</dd>
+    <dt>Przeciw</dt><dd>${list(s.con)}</dd>
+    <dt>Myśl alternatywna</dt><dd>${s.alt?esc(s.alt):'—'}</dd>
+  </dl></div>`;
+}
+
+const SCREENS={
+  start(role){
+    if(role==='patient')return {cls:'hero',html:`<p class="say">Terapeuta przygotowuje pokój.</p><p class="sub">Link pojawi się na czacie Waszego komunikatora.</p>`};
+    return {cls:'hero',html:`<p class="say">Gotowi na wspólną drogę?</p>
+      <p class="sub">Analiza myśli automatycznych. Pacjent wejdzie jednym kliknięciem, bez konta. Rozmowa zostaje w Waszym komunikatorze.</p>
+      <div class="row"><button class="btn" data-act="create-room">Utwórz pokój i link</button><button class="btn ghost" data-act="not-proto">Inne ćwiczenia</button></div>`};
+  },
+  dolacz(role){
+    if(role==='patient'){
+      return S.patientIn?{cls:'hero',html:`<p class="say">Jesteś w pokoju.</p><p class="sub">Terapeuta jest z Tobą. Zacznie, gdy będziecie gotowi.</p>`}
+      :{cls:'hero',html:`<p class="say">Cześć. Terapeuta na Ciebie czeka.</p><p class="sub">Nie musisz niczego zakładać ani ustawiać.</p><div class="row"><button class="btn" data-act="enter-room">Wejdź do pokoju</button></div>`};
+    }
+    return {cls:'hero',html:`<p class="say">Pokój jest gotowy.</p><div class="card" style="width:100%">
+      <p class="label">Wklej ten link na czacie komunikatora:</p><p class="linkbox">${esc(DATA.roomLink)}</p>
+      <div class="row"><button class="btn ghost" data-act="copy-link">Kopiuj link</button></div>
+      <p class="status ${S.patientIn?'on':''}"><i></i>${S.patientIn?'Pacjent jest w sesji':'Czekamy, aż pacjent wejdzie'}</p></div>
+      <div class="row"><button class="btn" data-act="begin" ${S.patientIn?'':'disabled'}>Rozpocznij ćwiczenie</button></div>`};
+  },
+  'etap-0'(role){
+    return {html:`${say(0)}<div class="row">${S.understood?`<p class="status on"><i></i>${role==='patient'?'Dziękuję. Możemy ruszać.':'Pacjent kliknął „Rozumiem”.'}</p>`:`<button class="btn ${role==='patient'?'':'ghost'}" data-act="understood">Rozumiem</button>`}</div>`};
+  },
+  'etap-1'(role){
+    return {html:`${say(1)}<div class="card"><label class="label" for="${role}-sit">Co się wydarzyło?</label>
+      <textarea id="${role}-sit" data-bind="sit.situation" placeholder="Np. wtorek rano, biuro. Szef przeszedł obok bez słowa.">${esc(S.sit.situation)}</textarea>
+      ${det('h1','Pytania pomocnicze (przykładowe)',helpers(1))}</div>`};
+  },
+  'etap-2'(role){
+    const list=S.sit.thoughts;
+    return {html:`${say(2)}<div class="card">${addBox(role,'thought','add-thought','Dodaj myśl','Np. znowu coś zawaliłem','Twoja myśl lub obraz')}</div>
+      ${list.length?`<ul class="bubbles">${list.map(t=>`<li class="bubble ${S.fresh===t.id?'fresh':''}" style="--d:${phaseDelay(t.id,7)}">
+        <div class="top"><span class="t">${esc(t.text)}</span><button class="x" data-act="del-thought" data-arg="${t.id}" aria-label="Usuń myśl: ${esc(t.text)}">${X_ICON}</button></div>
+        ${det('b'+t.id,`Jak mocno w to wierzysz? <span data-show="thought.${t.id}.belief">${t.belief}</span>%`,`<input type="range" min="0" max="100" value="${t.belief}" data-bind="thought.${t.id}.belief" aria-label="Siła przekonania: ${esc(t.text)}">`)}
+      </li>`).join('')}</ul>`:`<p class="empty">Nie masz jeszcze żadnej myśli. Pierwsza pojawi się na niebie.</p>`}`};
+  },
+  'etap-3'(role){
+    const list=S.sit.thoughts;
+    return {html:`${say(3)}${list.length?`<div class="bubbles" role="radiogroup" aria-label="Gorąca myśl">${list.map(t=>`<button class="pickable" role="radio" aria-checked="${t.id===S.sit.hotId}" data-act="pick-hot" data-arg="${t.id}">${esc(t.text)}</button>`).join('')}</div>${S.sit.hotId?`<p class="sky-word">Ta myśl będzie Ci towarzyszyć w dalszej drodze.</p>`:''}`
+      :`<p class="empty">Nie ma jeszcze myśli do wyboru.</p>${role==='therapist'?`<div class="row"><button class="btn ghost" data-act="go" data-arg="etap-2">Wróć do myśli automatycznych</button></div>`:''}`}`};
+  },
+  'etap-4'(role){
+    const sel=S.sit.emotions,names=sel.map(e=>e.name);
+    const all=[...DATA.emotions,...names.filter(n=>!DATA.emotions.includes(n))];
+    const v=maxOf('before');
+    return {cls:'hot',html:`${hotChip()}${say(4)}<div class="card"><p class="label">Karty emocji (lista przykładowa)</p>
+      <div class="chips">${all.map(n=>`<button class="chip" aria-pressed="${names.includes(n)}" data-act="toggle-emo" data-arg="${esc(n)}">${esc(n)}</button>`).join('')}</div>
+      ${det('o4','Inna emocja',addBox(role,'other','add-emo','Dodaj emocję','Np. rozczarowanie','Nazwa emocji'))}</div>
+      <div class="card">${sel.length?sel.map(e=>`<div class="emo ${S.fresh===e.id?'fresh':''}"><div class="h"><span class="label">${esc(e.name)}</span><span class="num" data-show="emo.${e.id}.before">${e.before}</span></div>
+        <input type="range" min="0" max="100" value="${e.before}" data-bind="emo.${e.id}.before" aria-label="Nasilenie: ${esc(e.name)}, od 0 do 100"></div>`).join('')+`<p class="sky-word">Niebo: <span data-weather="before">${skyWord(v)}</span></p>`:`<p class="empty">Nie wybrano jeszcze żadnej emocji. Wybierz kartę powyżej.</p>`}</div>
+      <div class="card"><label class="label" for="${role}-body">Co działo się w ciele?</label><input type="text" id="${role}-body" data-bind="sit.body" value="${esc(S.sit.body)}" placeholder="Np. ścisk w żołądku">
+      <label class="label" for="${role}-beh">Co zrobiłeś?</label><input type="text" id="${role}-beh" data-bind="sit.behavior" value="${esc(S.sit.behavior)}" placeholder="Np. sprawdzałem raport"></div>`};
+  },
+  'etap-5'(role){
+    return {cls:'hot',html:`${hotChip()}${say(5)}<div class="card">${addBox(role,'pro','add-pro','Dodaj','Np. nie odpisał na moją wiadomość','Fakt za tą myślą')}
+      ${ptList(S.sit.pro,'pro')||`<p class="empty">Nie ma jeszcze żadnego faktu. Każdy stanie się kamieniem na ścieżce.</p>`}</div>`};
+  },
+  'etap-6'(role){
+    const dist=S.sit.distortions;
+    return {cls:'hot',html:`${hotChip()}${say(6)}<div class="card">${addBox(role,'con','add-con','Dodaj','Np. szef pochwalił mój raport','Fakt, który nie pasuje do tej myśli')}
+      ${ptList(S.sit.con,'con')||`<p class="empty">Nie ma jeszcze żadnego faktu. Każdy zapali latarnię na ścieżce.</p>`}
+      ${det('h6','Pytania pomocnicze (przykładowe)',helpers(6))}
+      ${det('d6','Karty zniekształceń poznawczych (opcjonalne, przykładowe)',`<ul class="chips">${DATA.distortions.map(d=>`<li><button class="chip" aria-pressed="${dist.includes(d.n)}" data-act="toggle-dist" data-arg="${esc(d.n)}" title="${esc(d.d)}">${esc(d.n)}</button></li>`).join('')}</ul>`)}</div>`};
+  },
+  'etap-7'(role){
+    const li=a=>a.length?a.map(x=>`<li>${esc(x.text)}</li>`).join(''):'<li>Brak</li>';
+    return {cls:'hot',html:`${hotChip()}${say(7)}<div class="card"><div class="two"><div><h3>Za</h3><ul>${li(S.sit.pro)}</ul></div><div><h3>Przeciw</h3><ul>${li(S.sit.con)}</ul></div></div>
+      <label class="label" for="${role}-alt">Inne spojrzenie</label><textarea id="${role}-alt" data-bind="sit.alt" placeholder="Np. szef mógł być zajęty. To nie musi mieć związku ze mną.">${esc(S.sit.alt)}</textarea>
+      ${det('a7',`Jak mocno w to wierzysz? <span data-show="sit.altBelief">${S.sit.altBelief}</span>%`,`<input type="range" min="0" max="100" value="${S.sit.altBelief}" data-bind="sit.altBelief" aria-label="Siła przekonania do nowej myśli">`)}
+      ${det('h7','Pytania pomocnicze (przykładowe)',helpers(7))}</div>`};
+  },
+  'etap-8'(role){
+    const sel=S.sit.emotions;
+    return {cls:'hot',html:`${hotChip()}${say(8)}<div class="card">${sel.length?sel.map(e=>`<div class="emo"><div class="h"><span class="label">${esc(e.name)}</span><span class="num" data-show="emo.${e.id}.after">${e.after==null?e.before:e.after}</span></div>
+      <input type="range" min="0" max="100" value="${e.after==null?e.before:e.after}" data-bind="emo.${e.id}.after" aria-label="Nasilenie teraz: ${esc(e.name)}, od 0 do 100"></div>`).join('')+`<p class="sky-word">Niebo: <span data-weather="after">${skyWord(maxOf('after'))}</span></p>`:`<p class="empty">W etapie „Emocje i reakcje” nie wybrano żadnej emocji.</p>`}</div>
+      ${sel.length?`<div class="card"><p class="label">Przed i po</p><div data-chart style="display:flex;flex-direction:column;gap:10px">${chart()}</div></div>`:''}
+      <div class="card"><label class="label" for="${role}-note">Co zmieniło się w ciele albo w tym, co chcesz zrobić?</label><textarea id="${role}-note" data-bind="sit.afterNote" placeholder="Np. ramiona trochę odpuściły">${esc(S.sit.afterNote)}</textarea></div>`};
+  },
+  'etap-9'(role){
+    return {html:`${say(9)}${situationRows().map(rowHtml).join('')}<div class="row"><button class="btn ${role==='patient'?'':'ghost'}" data-act="print">Pobierz PDF</button><button class="btn ghost" data-act="go" data-arg="pocztowka">Zobacz pocztówkę</button></div>`};
+  },
+  przerwa(role){
+    return {cls:'hero',html:`<p class="say">Robimy przerwę.</p><p class="sub">Nic nie musisz teraz robić. Twoja praca czeka.</p>${role==='therapist'?`<div class="row"><button class="btn" data-act="resume">Wznów ćwiczenie</button></div>`:''}`};
+  },
+  oddech(role){
+    const b=S.br;
+    const scale=(k,q)=>`<p class="say">${q}</p><div class="card" style="width:100%"><div class="scale-num" data-show="br.${k}">${b[k]}</div>
+      <input type="range" min="0" max="10" value="${b[k]}" data-bind="br.${k}" aria-label="Napięcie od 0 do 10"><div class="ends"><span>0, spokój</span><span>10, bardzo silne</span></div></div>`;
+    if(b.step==='intro')return {cls:'hero',html:`<p class="say">Zatrzymajmy się na chwilę.</p><p class="sub">Krótkie ćwiczenie oddechowe w rytmie 4–2–6. Zajmie około minuty i możesz przerwać w każdej chwili.</p><div class="row"><button class="btn" data-act="br-step" data-arg="before">Zaczynamy</button></div>`};
+    if(b.step==='before')return {cls:'hero',html:`${scale('before','Jak silne jest teraz Twoje napięcie?')}<p class="sub">Zobacz, jak zmienia się niebo. To Twoja pogoda na teraz.</p><div class="row"><button class="btn" data-act="br-start">Dalej</button></div>`};
+    if(b.step==='breath')return {cls:'hero breath',html:`<p class="phase" data-br="phase">Przygotuj się</p><p class="sub" data-br="hint">usiądź wygodnie, rozluźnij ramiona</p><p class="sub" data-br="count" aria-live="polite">Oddech 1 z 4</p><div class="row"><button class="btn ghost" data-act="br-pause" data-br="pause">Pauza</button><button class="btn ghost" data-act="br-finish">Zakończ oddech</button></div>`};
+    if(b.step==='after')return {cls:'hero',html:`${scale('after','Dobrze. A jak jest teraz?')}<div class="row"><button class="btn" data-act="br-step" data-arg="done">Zobacz podsumowanie</button></div>`};
+    const d=b.before-b.after;
+    const line=d>0?'Napięcie spadło. Możesz wrócić do tego rytmu, kiedy zechcesz.':d===0?'Napięcie bez zmian. To też w porządku, czasem ulga przychodzi później.':'Napięcie jest teraz wyższe. Warto o tym porozmawiać.';
+    return {cls:'hero',html:`<p class="say">${line}</p><div class="card" style="width:100%"><dl class="sheetrow" style="text-align:left"><dt>Napięcie</dt><dd>${b.before} → ${b.after}</dd><dt>Oddechy</dt><dd>${b.cycles}, rytm 4–2–6</dd></dl></div>
+      ${role==='therapist'?`<div class="row"><button class="btn" data-act="br-back">Wróć do podróży</button></div>`:`<p class="sub">Terapeuta poprowadzi Cię dalej.</p>`}`};
+  },
+  pocztowka(role){
+    const s=S.sit,h=hot();
+    const ems=s.emotions;
+    const b=ems.length?maxOf('before'):50,a=ems.length?maxOf('after'):50;
+    return {cls:'hero',html:`<div class="card" style="width:100%;text-align:left"><div class="post-sky" style="background:linear-gradient(100deg,${skyCss(b,'mid')},${skyCss(b,'hor')} 42%,${skyCss(a,'hor')} 58%,${skyCss(a,'mid')})"><span class="l">przed</span><span class="r">po</span></div>
+      <p class="say" style="text-align:left">Twoja droga przez tę sytuację</p>
+      ${h?`<p><span class="label">Gorąca myśl</span>${esc(h.text)}</p>`:''}
+      ${s.alt?`<p><span class="label">Inne spojrzenie</span>${esc(s.alt)}</p>`:''}
+      ${ems.length?`<div data-chart style="display:flex;flex-direction:column;gap:10px">${chart()}</div>`:`<p class="empty">Bez oceny emocji w tej sytuacji.</p>`}
+      </div><div class="row"><button class="btn" data-act="print">Pobierz PDF</button><button class="btn ghost" data-act="go" data-arg="${S.ended?'koniec':'etap-9'}">${S.ended?'Wróć':'Wróć do podsumowania'}</button></div>`};
+  },
+  koniec(role){
+    return {cls:'hero',html:`<p class="say">Sesja zakończona.</p><p class="sub">${role==='therapist'?'Link dla pacjenta już nie działa. Dziękuję za wspólną drogę.':'Dziękuję, że przeszliśmy tę drogę razem. Możesz spokojnie zamknąć to okno.'}</p>
+      <div class="row"><button class="btn ghost" data-act="go" data-arg="pocztowka">Zobacz pocztówkę</button>${role==='therapist'?`<button class="btn" data-act="new-session">Nowa sesja</button>`:''}</div>`};
+  }
+};
+
+/* ---------- Elementy stałe widoku ---------- */
+function hud(role){
+  const n=stageNo();
+  const label=`<span class="pane-label">${role==='therapist'?'Widok terapeuty':'Widok pacjenta'}</span>`;
+  if(n<0)return label;
+  const name=DATA.stages[n].name;
+  const situ=S.rows.length?` · sytuacja ${S.rows.length+1}`:'';
+  return `${label}<div class="dots" aria-hidden="true">${DATA.stages.map((_,i)=>`<i class="${i<n?'done':i===n?'now':''}"></i>`).join('')}</div>
+    <span class="prog-text">${n===0?name:`Etap ${n} z 9 · ${esc(name)}`}${situ}</span>`;
+}
+function panel(role){
+  const n=stageNo();
+  if(role!=='therapist'||(n<0&&!['oddech','przerwa'].includes(S.screen)))return '';
+  const st=n>=0?DATA.stages[n]:null;
+  const help=n>=0&&DATA.helpers[n]?`<div><h2>Pytania pomocnicze (przykładowe)</h2>${helpers(n)}</div>`:'';
+  return `<button class="pill panel-close" data-act="panel" data-arg="0">Zamknij</button>
+    <p class="only">Tylko Ty to widzisz.</p>
+    <p class="status on" style="justify-content:flex-start"><i></i>Pacjent jest w sesji</p>
+    ${st?`<div><h2>Wskazówka</h2><p class="tip">${esc(st.tip)}</p></div>`:`<div><h2>Wskazówka</h2><p class="tip">${S.screen==='oddech'?'Oddychaj razem z pacjentem. Możesz przerwać w każdej chwili.':'Wznów ćwiczenie, gdy oboje będziecie gotowi.'}</p></div>`}
+    ${help}
+    <div><h2>Etapy</h2><ol class="jump">${DATA.stages.map((s,i)=>`<li><button data-act="go" data-arg="etap-${i}" ${i===n?'aria-current="step"':''}><b>${i}</b>${esc(s.name)}</button></li>`).join('')}</ol></div>`;
+}
+function bar(role){
+  const n=stageNo();
+  if(role==='patient'){
+    if(n<0)return '';
+    return `<p class="msg">Terapeuta przejdzie dalej, gdy będziecie gotowi</p>`;
+  }
+  if(n>=0){
+    return `<div class="grp"><button class="pill panel-open" data-act="panel" data-arg="1">Wskazówki</button><button class="pill" data-act="breath-open">Oddech</button><button class="pill" data-act="pause">Pauza</button><button class="pill" data-act="end">Zakończ sesję</button></div>
+      <div class="grp"><button class="pill" data-act="back" ${n===0?'disabled':''}>Wstecz</button>
+      ${n<9?`<button class="pill" data-act="skip">Pomiń</button><button class="btn" data-act="next">Dalej</button>`:`<button class="btn" data-act="add-sit">Dodaj kolejną sytuację</button>`}</div>`;
+  }
+  if(S.screen==='oddech'&&S.br.step!=='done')return `<div class="grp"><button class="pill panel-open" data-act="panel" data-arg="1">Wskazówki</button></div><div class="grp"><button class="pill" data-act="br-back">Wróć do podróży</button></div>`;
+  if(S.screen==='przerwa')return `<div class="grp"><button class="pill panel-open" data-act="panel" data-arg="1">Wskazówki</button><button class="pill" data-act="end">Zakończ sesję</button></div>`;
+  return '';
+}
+
+/* ===================== RYSOWANIE WIDOKÓW ===================== */
+const panes={therapist:$('#pane-therapist'),patient:$('#pane-patient')};
+for(const r in panes){
+  panes[r].innerHTML=`<canvas aria-hidden="true"></canvas><div class="hud"></div><div class="body"><main class="stage"><div class="scene"></div></main><aside class="panel" aria-label="Panel terapeuty"></aside></div><div class="bar"></div><p class="foot">Prototyp — dane fikcyjne</p>`;
+}
+const part=(r,c)=>panes[r].querySelector(c);
+
+function focusKey(){
+  const a=document.activeElement;
+  if(!a||a===document.body)return null;
+  const p=a.closest('.pane');
+  if(!p)return null;
+  return {role:p.dataset.role,bind:a.dataset.bind,act:a.dataset.act,arg:a.dataset.arg};
+}
+function restoreFocus(k){
+  if(!k)return;
+  let sel=k.bind?`[data-bind="${k.bind}"]`:k.act?`[data-act="${k.act}"]${k.arg!=null?`[data-arg="${CSS.escape(k.arg)}"]`:''}`:null;
+  if(!sel)return;
+  const el=panes[k.role].querySelector(sel);
+  if(el){el.focus({preventScroll:true});}
+}
+function fillScene(r){
+  const scr=SCREENS[S.screen](r);
+  const sc=part(r,'.scene');
+  sc.className='scene '+(scr.cls||'');
+  sc.innerHTML=scr.html;
+}
+function fillChrome(r){
+  part(r,'.hud').innerHTML=hud(r);
+  const p=panel(r),el=part(r,'.panel');
+  el.innerHTML=p;el.hidden=!p;
+  part(r,'.bar').innerHTML=bar(r);
+  panes[r].classList.toggle('panel-on',S.panel&&!!p);
+}
+/* Odświeżenie bez przejścia: po dodaniu lub usunięciu elementu */
+function refresh(){
+  const k=focusKey();
+  const sc={};
+  for(const r in panes){sc[r]=part(r,'.stage').scrollTop;fillScene(r);fillChrome(r);part(r,'.stage').scrollTop=sc[r];}
+  restoreFocus(k);
+  S.fresh=null;
+}
+/* Przejście między etapami: tekst rozmywa się i wypływa */
+let swapTok=0;
+function transition(){
+  const tok=++swapTok,k=focusKey();
+  for(const r in panes)fillChrome(r);
+  restoreFocus(k);
+  layout();
+  const calm=World.calm,wait=calm?160:380;
+  for(const r in panes)part(r,'.scene').classList.add('out');
+  setTimeout(()=>{
+    if(tok!==swapTok)return;
+    for(const r in panes){
+      fillScene(r);
+      const sc=part(r,'.scene');
+      sc.classList.add('out');
+      part(r,'.stage').scrollTop=0;
+      sc.getBoundingClientRect();
+      sc.classList.remove('out');
+    }
+    if(S.role==='patient'&&!isDual()&&matchMedia('(pointer:fine)').matches){
+      const f=panes.patient.querySelector('.scene input:not([type=range]),.scene textarea');
+      if(f)f.focus({preventScroll:true});
+    }
+    S.fresh=null;
+    layout();
+  },wait);
+}
+
+/* ===================== LOGIKA NAWIGACJI ===================== */
+function isDual(){return innerWidth>=1600;}
+function go(name){
+  if(location.hash==='#'+name)route();else location.hash=name;
+}
+function route(){
+  const name=location.hash.replace('#','')||'start';
+  const map=$('#mapa');
+  if(name==='mapa'){renderMap();map.hidden=false;return;}
+  map.hidden=true;
+  S.screen=SCREENS[name]?name:'start';
+  const n=stageNo();
+  if(n>=0||['przerwa','oddech','pocztowka'].includes(S.screen)){S.room=true;S.patientIn=true;}
+  if(S.screen==='dolacz')S.room=true;
+  if(n===8)S.sit.emotions.forEach(e=>{if(e.after==null)e.after=e.before;});
+  S.panel=false;
+  S.br.on=S.screen==='oddech'&&S.br.step==='breath'?S.br.on:false;
+  World.pulse();
+  transition();
+}
+function setRole(r){
+  S.role=r;
+  $('#roleT').setAttribute('aria-pressed',r==='therapist');
+  $('#roleP').setAttribute('aria-pressed',r==='patient');
+  panes.therapist.classList.toggle('show',r==='therapist');
+  panes.patient.classList.toggle('show',r==='patient');
+  layout();
+}
+function nextStage(){
+  const n=stageNo();
+  if(S.screen==='dolacz'){S.patientIn=true;go('etap-0');return;}
+  if(n<0||n>=9)return;
+  if(n===3&&!S.sit.hotId){
+    if(S.sit.thoughts.length===1)S.sit.hotId=S.sit.thoughts[0].id;
+    else if(S.sit.thoughts.length>1){toast('Wybierzcie gorącą myśl albo pomiń ten etap.');return;}
+  }
+  go('etap-'+(n+1));
+}
+function prevStage(){const n=stageNo();if(n>0)go('etap-'+(n-1));}
+function skipStage(){
+  const n=stageNo();
+  if(n===3&&!S.sit.hotId&&S.sit.thoughts.length===1)S.sit.hotId=S.sit.thoughts[0].id;
+  if(n>=0&&n<9)go('etap-'+(n+1));
+}
+
+/* ---------- Pola i suwaki: to, co wpisane, od razu w obu widokach ---------- */
+function bget(k){const p=k.split('.');
+  if(p[0]==='sit')return S.sit[p[1]];
+  if(p[0]==='drafts')return S.drafts[p[1]];
+  if(p[0]==='br')return S.br[p[1]];
+  if(p[0]==='emo'){const e=emoById(p[1]);return e?(e[p[2]]==null?e.before:e[p[2]]):0;}
+  if(p[0]==='thought'){const t=S.sit.thoughts.find(x=>x.id==p[1]);return t?t[p[2]]:0;}
+}
+function bset(k,v){const p=k.split('.');
+  if(p[0]==='sit')S.sit[p[1]]=v;
+  else if(p[0]==='drafts')S.drafts[p[1]]=v;
+  else if(p[0]==='br')S.br[p[1]]=v;
+  else if(p[0]==='emo'){const e=emoById(p[1]);if(e)e[p[2]]=v;}
+  else if(p[0]==='thought'){const t=S.sit.thoughts.find(x=>x.id==p[1]);if(t)t[p[2]]=v;}
+}
+document.addEventListener('input',e=>{
+  const el=e.target,k=el.dataset&&el.dataset.bind;
+  if(!k)return;
+  const v=el.type==='range'?+el.value:el.value;
+  bset(k,v);
+  $$(`[data-bind="${k}"]`).forEach(o=>{if(o!==el)o.value=v;});
+  $$(`[data-show="${k}"]`).forEach(o=>{o.textContent=v;});
+  if(k.startsWith('emo.')){
+    $$('[data-weather="before"]').forEach(o=>o.textContent=skyWord(maxOf('before')));
+    $$('[data-weather="after"]').forEach(o=>o.textContent=skyWord(maxOf('after')));
+    $$('[data-chart]').forEach(o=>o.innerHTML=chart());
+  }
+  if(k.startsWith('drafts.')&&S.errors[k.split('.')[1]]){
+    delete S.errors[k.split('.')[1]];
+    $$(`[data-bind="${k}"]`).forEach(o=>{o.classList.remove('bad');const er=o.closest('.card').querySelector('.err');if(er)er.remove();});
+  }
+  if(el.closest('.pane').dataset.role==='therapist')World.therapistPulse();
+});
+document.addEventListener('toggle',e=>{const d=e.target;if(d.dataset&&d.dataset.open){S.open[d.dataset.open]=d.open;
+  $$(`details[data-open="${d.dataset.open}"]`).forEach(o=>{if(o!==d&&o.open!==d.open)o.open=d.open;});}},true);
+document.addEventListener('keydown',e=>{
+  const el=e.target;
+  if(e.key==='Enter'&&el.dataset&&el.dataset.enter){e.preventDefault();doAct(el.dataset.enter,null,el.closest('.pane').dataset.role);}
+  /* Skrót moderatora testów: przejście etapu z widoku pacjenta */
+  if(e.ctrlKey&&e.shiftKey&&e.key==='ArrowRight'){e.preventDefault();nextStage();}
+  if(e.ctrlKey&&e.shiftKey&&e.key==='ArrowLeft'){e.preventDefault();prevStage();}
+});
+
+/* ---------- Działania ---------- */
+function addItem(draft,list,kind,role,label){
+  const v=S.drafts[draft].trim();
+  if(!v){S.errors[draft]=`Wpisz choć jedno słowo, żeby ${label}.`;refresh();focusDraft(draft,role);return;}
+  const it={id:uid++,text:v};
+  if(kind==='thought')it.belief=70;
+  list.push(it);S.fresh=it.id;S.drafts[draft]='';delete S.errors[draft];
+  World.pulse();Sound.chime(kind==='con'?659:523);
+  refresh();focusDraft(draft,role);
+}
+function focusDraft(d,role){const f=panes[role].querySelector(`[data-bind="drafts.${d}"]`);if(f)f.focus({preventScroll:true});}
+const ACTS={
+  'create-room'(a,role,btn){btn.disabled=true;btn.textContent='Tworzę pokój…';setTimeout(()=>{S.room=true;go('dolacz');},700);},
+  'copy-link'(a,role,btn){
+    const done=()=>{toast('Link skopiowany. Wklej go na czacie komunikatora.');
+      if(!S.patientIn)setTimeout(()=>{if(!S.patientIn&&S.screen==='dolacz'){S.patientIn=true;World.pulse();toast('Pacjent jest w sesji.');refresh();}},2600);};
+    try{navigator.clipboard.writeText(DATA.roomLink).then(done,done);}catch(e){done();}
+  },
+  'enter-room'(){S.patientIn=true;World.pulse();Sound.chime(523);refresh();},
+  'begin'(){go('etap-0');},
+  'understood'(){S.understood=true;World.pulse();Sound.chime(523);refresh();},
+  'add-thought'(a,r){addItem('thought',S.sit.thoughts,'thought',r,'dodać myśl');},
+  'del-thought'(a){const id=+a;S.sit.thoughts=S.sit.thoughts.filter(t=>t.id!==id);if(S.sit.hotId===id)S.sit.hotId=null;refresh();},
+  'pick-hot'(a){S.sit.hotId=+a;World.pulse();Sound.chime(392);refresh();},
+  'toggle-emo'(a){const i=S.sit.emotions.findIndex(e=>e.name===a);
+    if(i>=0)S.sit.emotions.splice(i,1);else{const e={id:uid++,name:a,before:50,after:null};S.sit.emotions.push(e);S.fresh=e.id;World.pulse();}
+    refresh();},
+  'add-emo'(a,r){const v=S.drafts.other.trim();
+    if(!v){S.errors.other='Wpisz choć jedno słowo, żeby dodać emocję.';refresh();focusDraft('other',r);return;}
+    if(!S.sit.emotions.some(e=>e.name===v)){const e={id:uid++,name:v,before:50,after:null};S.sit.emotions.push(e);S.fresh=e.id;}
+    S.drafts.other='';delete S.errors.other;World.pulse();refresh();focusDraft('other',r);},
+  'add-pro'(a,r){addItem('pro',S.sit.pro,'pro',r,'dodać fakt');},
+  'del-pro'(a){S.sit.pro=S.sit.pro.filter(x=>x.id!==+a);refresh();},
+  'add-con'(a,r){addItem('con',S.sit.con,'con',r,'dodać fakt');},
+  'del-con'(a){S.sit.con=S.sit.con.filter(x=>x.id!==+a);refresh();},
+  'toggle-dist'(a){const d=S.sit.distortions,i=d.indexOf(a);if(i>=0)d.splice(i,1);else d.push(a);refresh();},
+  'go'(a){go(a);},
+  'next'(){World.therapistPulse();nextStage();},
+  'back'(){World.therapistPulse();prevStage();},
+  'skip'(){World.therapistPulse();skipStage();},
+  'pause'(){S.prev=S.screen;go('przerwa');},
+  'resume'(){go(S.prev);},
+  'end'(){$('#endDialog').showModal();},
+  'breath-open'(){S.prev=S.screen;S.br=newBr();go('oddech');},
+  'br-step'(a){S.br.step=a;if(a==='done'){}transition();},
+  'br-start'(){const b=S.br;b.step='breath';b.on=true;b.paused=false;b.acc=0;b.last=performance.now();b.key='';b.phase='';b.cycles=0;transition();},
+  'br-pause'(){const b=S.br;b.paused=!b.paused;$$('[data-br="pause"]').forEach(o=>o.textContent=b.paused?'Wznów':'Pauza');if(b.paused){$$('[data-br="hint"]').forEach(o=>o.textContent='wstrzymane, odpocznij');b.key='';}},
+  'br-finish'(){finishBreath();},
+  'br-back'(){S.br.on=false;go(S.prev);},
+  'print'(){buildPrint();toast('W oknie drukowania wybierz „Zapisz jako PDF”.');setTimeout(()=>window.print(),400);},
+  'add-sit'(){S.rows.push(S.sit);S.sit=newSit();go('etap-1');},
+  'new-session'(){resetAll();go('start');},
+  'not-proto'(){toast('Ta funkcja nie jest częścią prototypu.');},
+  'panel'(a){S.panel=a==='1';panes.therapist.classList.toggle('panel-on',S.panel);},
+  'map-a'(){resetAll();setRole('therapist');go('start');},
+  'map-b'(){resetAll();S.room=true;setRole('patient');go('dolacz');},
+  'map-c'(){resetAll();loadSample();setRole('therapist');go('etap-4');},
+  'map-load'(){loadSample();toast('Załadowano przykładową sytuację.');}
+};
+function doAct(act,arg,role,btn){const f=ACTS[act];if(f)f(arg,role,btn);}
+document.addEventListener('click',e=>{
+  const el=e.target.closest('[data-act]');
+  if(el&&!el.disabled){const p=el.closest('.pane');doAct(el.dataset.act,el.dataset.arg,p?p.dataset.role:S.role,el);return;}
+  const d=e.target.closest('[data-dlg]');
+  if(d){$('#endDialog').close();if(d.dataset.dlg==='yes'){S.ended=true;go('koniec');}}
+});
+$('#roleT').onclick=()=>setRole('therapist');
+$('#roleP').onclick=()=>setRole('patient');
+$('#calmBtn').onclick=()=>World.setCalm(!World.calm);
+$('#soundBtn').onclick=()=>Sound.toggle();
+addEventListener('hashchange',route);
+
+function buildPrint(){
+  const rows=situationRows().map((s,i)=>{
+    const h=s.thoughts.find(t=>t.id===s.hotId);
+    const L=a=>a.length?esc(a.map(x=>x.text).join('; ')):'—';
+    return `<h2>Sytuacja ${i+1}</h2><dl><dt>Sytuacja</dt><dd>${esc(s.situation||'—')}</dd><dt>Myśli automatyczne</dt><dd>${L(s.thoughts)}</dd><dt>Gorąca myśl</dt><dd>${h?esc(h.text):'—'}</dd>
+    <dt>Emocje przed i po</dt><dd>${s.emotions.length?s.emotions.map(e=>`${esc(e.name)}: ${e.before}${e.after==null?'':' → '+e.after}`).join(', '):'—'}</dd>
+    <dt>Ciało i zachowanie</dt><dd>${esc([s.body,s.behavior].filter(Boolean).join(' ')||'—')}</dd>
+    <dt>Argumenty potwierdzające</dt><dd>${L(s.pro)}</dd><dt>Argumenty podważające</dt><dd>${L(s.con)}</dd><dt>Myśl alternatywna</dt><dd>${esc(s.alt||'—')}</dd></dl>`;}).join('');
+  $('#print').innerHTML=`<h1>TeraCanvas: Analiza myśli</h1><p class="n">Prototyp — dane fikcyjne</p>${rows}`;
+}
+
+/* ---------- Mapa ekranów: tylko dla twórcy i moderatora ---------- */
+function renderMap(){
+  const links=[['start','Start: terapeuta tworzy pokój'],['dolacz','Dołączanie: link i wejście pacjenta'],...DATA.stages.map((s,i)=>[`etap-${i}`,`Etap ${i}: ${s.name}`]),['przerwa','Przerwa'],['oddech','Przerywnik oddechowy'],['pocztowka','Pocztówka'],['koniec','Koniec sesji']];
+  $('#mapa').innerHTML=`<div class="in"><h1>Mapa prototypu</h1>
+    <section><h2>Scenariusze</h2>
+    <div class="scn"><b>A. Terapeutka prowadzi</b><span>Start: pusty ekran startowy. Kroki: pokój i link, wprowadzenie, sytuacja, myśli automatyczne. Cel: przejście do etapu „Gorąca myśl” bez pomocy.</span><button class="btn ghost" data-act="map-a">Uruchom scenariusz A</button></div>
+    <div class="scn"><b>B. Pacjent pracuje</b><span>Start: wejście z linku. Kroki: etap 0, dodanie 3 myśli, wybór gorącej myśli. Cel: wybrana myśl widoczna u terapeuty.</span><button class="btn ghost" data-act="map-b">Uruchom scenariusz B</button></div>
+    <div class="scn"><b>C. Pełna podróż</b><span>Start: etap 4 z załadowaną przykładową sytuacją. Kroki: emocje, argumenty, myśl alternatywna, emocje ponownie, po drodze Pauza i Oddech. Cel: porównanie przed/po i podsumowanie.</span><button class="btn ghost" data-act="map-c">Uruchom scenariusz C</button></div></section>
+    <section><h2>Ekrany</h2><div class="links">${links.map(l=>`<a href="#${l[0]}">${esc(l[1])}</a>`).join('')}</div></section>
+    <section><h2>Dla moderatora</h2>
+      <p>Odświeżenie strony to reset między testerami. Przełącznik Terapeuta/Pacjent jest u góry, a od 1600 px szerokości oba widoki są widoczne obok siebie.</p>
+      <p>Gdy tester pracuje w widoku pacjenta: Ctrl+Shift+→ przechodzi etap dalej, Ctrl+Shift+← wraca.</p>
+      <p>Płynność sceny (założenie o technologii): <b id="fps">–</b> klatek na sekundę, szerokość okna <b id="wpx">–</b> px.</p>
+      <div class="row" style="justify-content:flex-start;margin-top:8px"><button class="btn ghost" data-act="map-load">Załaduj przykładową sytuację</button></div></section>
+    <p><a href="#${S.screen}">Wróć do aplikacji</a></p></div>`;
+}
+
+/* ===================== ODDECH ===================== */
+const PH=[{k:'in',d:4,l:'Wdech',h:'powoli, przez nos'},{k:'hold',d:2,l:'Zatrzymaj',h:'lekko, bez napinania'},{k:'out',d:6,l:'Wydech',h:'długo, przez usta'}];
+const CYC=12,NBR=4,LEAD=2;
+const ease=p=>.5-.5*Math.cos(Math.PI*p);
+function finishBreath(){const b=S.br;if(b.step!=='breath')return;b.on=false;b.after=b.before;b.step='after';transition();}
+function updateBreath(now){
+  const b=S.br;
+  if(S.screen!=='oddech'||!b.on){World.b+=(0-World.b)*.04;b.last=now;return;}
+  if(!b.paused)b.acc+=(now-b.last)/1000;
+  b.last=now;
+  const el=b.acc-LEAD;
+  if(el<0){World.b+=(0-World.b)*.05;return;}
+  const c=Math.floor(el/CYC);
+  if(c>=NBR){b.cycles=NBR;finishBreath();return;}
+  let w=el-c*CYC,i=0;while(w>PH[i].d){w-=PH[i].d;i++;}
+  const ph=PH[i],p=Math.min(1,w/ph.d);
+  if(!b.paused)World.b=ph.k==='in'?ease(p):ph.k==='hold'?1:1-ease(p);
+  const left=Math.max(1,Math.ceil(ph.d-w)),key=c+ph.k+left;
+  if(key!==b.key&&!b.paused){
+    b.key=key;
+    if(b.phase!==c+ph.k){b.phase=c+ph.k;$$('[data-br="phase"]').forEach(o=>o.textContent=ph.l);$$('[data-br="hint"]').forEach(o=>o.textContent=ph.h);Sound.chime(ph.k==='in'?523:ph.k==='hold'?659:392);}
+    $$('[data-br="count"]').forEach(o=>o.textContent=`Oddech ${c+1} z ${NBR} · ${left}`);
+    b.cycles=c;
+  }
+}
+
+/* ===================== DŹWIĘK (Web Audio) ===================== */
+const Sound=(()=>{
+  let AC=null,master,filter,on=false;
+  function init(){const C=window.AudioContext||window.webkitAudioContext;if(!C)return false;
+    AC=new C();master=AC.createGain();master.gain.value=0;filter=AC.createBiquadFilter();filter.type='lowpass';filter.frequency.value=400;filter.Q.value=.7;
+    [[110,'sine',.5],[164.8,'sine',.35],[220,'triangle',.12],[329.6,'sine',.06]].forEach(([f,t,g])=>{const o=AC.createOscillator(),gn=AC.createGain();o.type=t;o.frequency.value=f;o.detune.value=(Math.random()-.5)*8;gn.gain.value=g;o.connect(gn).connect(filter);o.start();});
+    filter.connect(master).connect(AC.destination);return true;}
+  return{
+    toggle(){if(!AC&&!init()){toast('Ta przeglądarka nie obsługuje dźwięku.');return;}on=!on;if(AC.state==='suspended')AC.resume();$('#soundBtn').setAttribute('aria-pressed',String(on));},
+    update(b,w){if(!AC)return;const t=AC.currentTime;master.gain.setTargetAtTime(on?.12+.07*b:0,t,.25);filter.frequency.setTargetAtTime(260+b*1100+(1-w)*240,t,.12);},
+    chime(f){if(!AC||!on)return;const o=AC.createOscillator(),g=AC.createGain(),t=AC.currentTime;o.type='sine';o.frequency.value=f;g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(.07,t+.04);g.gain.exponentialRampToValueAtTime(.0001,t+2.2);o.connect(g).connect(AC.destination);o.start(t);o.stop(t+2.3);}
+  };
+})();
+
+/* ===================== KRAJOBRAZ (canvas) ===================== */
+const CALM={top:[18,42,54],mid:[46,88,88],hor:[214,172,132],hill:[16,36,40],guide:[247,219,164]};
+const TENSE={top:[14,15,22],mid:[38,42,54],hor:[92,96,110],hill:[12,14,20],guide:[184,196,214]};
+const mix=(a,b,t)=>a.map((v,i)=>v+(b[i]-v)*t);
+const rgb=(c,a=1)=>`rgba(${c[0]|0},${c[1]|0},${c[2]|0},${a})`;
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+function skyCss(v,k){return rgb(mix(CALM[k],TENSE[k],v/100));}
+
+const World=(()=>{
+  const W_={b:0,calm:false};
+  let cv,ctx,W=0,H=0,DPR=1,dprCap=2,quality=1;
+  let T=0,last=performance.now(),cam=0,shown=30;
+  let pulseV=0,tPulse=0;
+  const G={x:0,y:0,r:40};
+  let focusX=0,hudB=100,fpsAvg=60,fpsN=0,slow=0;
+  const clouds=new Map();
+  const flies=Array.from({length:70},()=>({x:Math.random(),y:Math.random()*.72,s:.6+Math.random()*1.6,ph:Math.random()*6.28,v:.006+Math.random()*.02}));
+  const drops=Array.from({length:120},()=>({x:Math.random(),y:Math.random(),l:.015+Math.random()*.03,v:.35+Math.random()*.45}));
+  const stars=Array.from({length:60},()=>({x:Math.random(),y:Math.random()*.42,s:.4+Math.random()*.9,ph:Math.random()*6.28}));
+
+  function primary(){return isDual()?panes.patient:(S.role==='therapist'?panes.therapist:panes.patient);}
+  function resize(){
+    const p=primary();
+    cv=p.querySelector('canvas');ctx=cv.getContext('2d',{alpha:false});
+    DPR=Math.min(dprCap,window.devicePixelRatio||1);
+    W=p.clientWidth;H=p.clientHeight;
+    for(const r in panes){const c=panes[r].querySelector('canvas');const w=Math.round(W*DPR),h=Math.round(H*DPR);if(c.width!==w||c.height!==h){c.width=w;c.height=h;}}
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+    const sc=p.querySelector('.scene'),pr=p.getBoundingClientRect();
+    if(sc){const r=sc.getBoundingClientRect();focusX=r.left-pr.left+r.width/2;}
+    const hu=p.querySelector('.hud');hudB=hu?hu.getBoundingClientRect().bottom-pr.top:100;
+    if(!G.x){G.x=focusX||W/2;G.y=H*.22;}
+  }
+
+  /* --- pogoda: nasilenie 0–100 na podstawie danych etapu --- */
+  function weather(){
+    const n=stageNo();
+    if(S.screen==='oddech')return S.br[S.br.step==='after'||S.br.step==='done'?'after':'before']*10;
+    if(S.screen==='przerwa')return 12;
+    if(S.screen==='start'||S.screen==='dolacz')return 20;
+    if(S.screen==='koniec'||S.screen==='pocztowka'){const a=maxOf('after');return a==null?20:a;}
+    if(n<=0)return 22;
+    if(n===1)return 42;
+    if(n===2)return 48;
+    if(n===3)return S.sit.hotId?60:50;
+    if(n>=8){const a=maxOf('after');return a==null?30:a;}
+    const b=maxOf('before');
+    const v=b==null?50:b;
+    return n===7?v*(S.sit.alt?.72:.86):v;
+  }
+  function lift(){const s=S.sit;return clamp(s.con.length*.16+(s.alt?.36:0),0,1);}
+
+  /* --- ziemia --- */
+  function ridge(wx,base,amp,freq,seed){return H*base+Math.sin(wx*freq+seed)*amp+Math.sin(wx*freq*2.3+seed*1.7)*amp*.4+Math.sin(wx*freq*.37+seed*.6)*amp*.8;}
+  function drawRidge(par,base,amp,freq,seed,col,camPx){
+    ctx.beginPath();ctx.moveTo(0,H);
+    for(let x=0;x<=W+8;x+=8){ctx.lineTo(x,ridge(x+camPx*par,base,amp,freq,seed));}
+    ctx.lineTo(W,H);ctx.closePath();ctx.fillStyle=col;ctx.fill();
+  }
+  const FORE=[.875,0,.0045,7.7];
+  const fy=wx=>ridge(wx,FORE[0],H*.03,FORE[2],FORE[3]);
+
+  /* --- elementy krajobrazu --- */
+  function lantern(x,y,s,lit,col){
+    ctx.fillStyle=col;
+    ctx.fillRect(x-s*.09,y-s*.55,s*.18,s*.55);
+    ctx.fillRect(x-s*.24,y-s*.62,s*.48,s*.08);
+    ctx.fillRect(x-s*.17,y-s*.86,s*.34,s*.24);
+    ctx.beginPath();ctx.moveTo(x-s*.36,y-s*.86);ctx.quadraticCurveTo(x,y-s*1.1,x+s*.36,y-s*.86);ctx.closePath();ctx.fill();
+    if(lit>0){
+      const ly=y-s*.74,gl=ctx.createRadialGradient(x,ly,0,x,ly,s*1.2);
+      gl.addColorStop(0,`rgba(250,220,160,${.75*lit})`);gl.addColorStop(1,'rgba(250,220,160,0)');
+      ctx.fillStyle=gl;ctx.beginPath();ctx.arc(x,ly,s*1.2,0,6.283);ctx.fill();
+      ctx.fillStyle=`rgba(255,238,200,${lit})`;ctx.fillRect(x-s*.09,y-s*.82,s*.18,s*.16);
+    }
+  }
+  function branch(x,y,a,len,d,seed){
+    const x2=x+Math.cos(a)*len,y2=y+Math.sin(a)*len;
+    ctx.lineWidth=Math.max(1,d*1.5);ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x2,y2);ctx.stroke();
+    if(d>0){const j=Math.sin(seed*7.3)*.2,sw=Math.sin((T||0)*.4+seed)*.012*(W_.calm?0:1);
+      branch(x2,y2,a-.42+j+sw,len*.72,d-1,seed+1.3);branch(x2,y2,a+.46-j+sw,len*.68,d-1,seed+2.1);}
+  }
+  function tree(x,y,s,col){ctx.strokeStyle=col;ctx.lineCap='round';branch(x,y,-1.57,s*.34,quality<1?3:4,x*.001+1);}
+  function stones(x,y,n,col,s){
+    let yy=y;
+    for(let i=0;i<n;i++){const w=s*(.36-.03*Math.min(i,8)),h=s*.1;
+      ctx.fillStyle=col;ctx.beginPath();ctx.ellipse(x+Math.sin(i*2.4)*s*.05,yy-h,w,h,0,0,6.283);ctx.fill();
+      ctx.strokeStyle='rgba(242,211,160,.3)';ctx.lineWidth=1;ctx.beginPath();ctx.ellipse(x+Math.sin(i*2.4)*s*.05,yy-h,w,h,0,3.5,5.9);ctx.stroke();
+      yy-=h*1.8;}
+  }
+  function lake(x,y,s,top,hor){
+    const g=ctx.createLinearGradient(0,y-s*.1,0,y+s*.24);g.addColorStop(0,rgb(hor,.9));g.addColorStop(1,rgb(top,.9));
+    ctx.fillStyle=g;ctx.beginPath();ctx.ellipse(x,y+s*.05,s*1.25,s*.2,0,0,6.283);ctx.fill();
+    ctx.strokeStyle='rgba(240,230,210,.35)';ctx.lineWidth=1;
+    for(let i=0;i<4;i++){const yy=y+s*(.0+i*.05),sw=s*(.7-.1*i)+Math.sin(T*.6+i)*s*.06*(W_.calm?0:1);ctx.beginPath();ctx.moveTo(x-sw,yy);ctx.lineTo(x+sw,yy);ctx.stroke();}
+  }
+  function cloud(x,y,r,seed,c,a){
+    if(a<=.01)return;
+    const n=quality<1?4:6;
+    ctx.globalAlpha=a;
+    for(let i=0;i<n;i++){
+      const ang=seed*2.1+i*1.05,dx=Math.cos(ang)*r*(.5+.45*Math.sin(seed+i)),dy=Math.sin(ang)*r*.26;
+      const pr=r*(.62+.22*Math.sin(seed*3+i*1.7));
+      const g=ctx.createRadialGradient(x+dx,y+dy,pr*.1,x+dx,y+dy,pr);
+      g.addColorStop(0,rgb(c,.9));g.addColorStop(.5,rgb(c,.55));g.addColorStop(1,rgb(c,0));
+      ctx.fillStyle=g;ctx.beginPath();ctx.arc(x+dx,y+dy,pr,0,6.283);ctx.fill();
+    }
+    ctx.globalAlpha=1;
+  }
+  function prox(i){return clamp(1-Math.abs(cam-i),0,1);}
+
+  function syncClouds(n,dt){
+    const list=S.sit.thoughts,hotId=S.sit.hotId;
+    const show=n>=2||S.screen==='pocztowka';
+    list.forEach(t=>{if(!clouds.has(t.id))clouds.set(t.id,{x:focusX,y:hudB+10,r:4,a:0,seed:t.id*1.37+.4,l:0});});
+    for(const [id,c] of clouds){
+      const i=list.findIndex(t=>t.id===id),isHot=id===hotId;
+      let tx=focusX,ty=hudB+40,tr=28,ta=0,tl=0;
+      if(i>=0&&show&&n!==-1||i>=0&&S.screen==='pocztowka'){
+        const big=n>=4||S.screen==='pocztowka';
+        if(isHot&&(n>=3||S.screen==='pocztowka')){
+          const L=lift();
+          tx=focusX+Math.min(W*.14,120);ty=hudB+44-L*14;
+          tr=(big?64:52)*(1-L*.3)*clamp(H/760,.75,1.2);ta=.96-L*.3;tl=L;
+        }else if(n===2||n===3){
+          const slot=(i%6),sgn=slot%2?1:-1,step=Math.ceil((slot+1)/2);
+          tx=focusX+sgn*step*Math.min(W*.15,150);ty=hudB+26+(slot%3)*16;
+          tr=clamp(22+t_len(list[i].text),22,34);ta=n===3&&hotId&&!isHot?.3:.85;tl=.42;
+        }
+      }
+      const k=1-Math.exp(-dt*(W_.calm?8:1.4));
+      c.x+=(tx-c.x)*k;c.y+=(ty-c.y)*k;c.r+=(tr-c.r)*k;c.a+=(ta-c.a)*k;c.l+=(tl-c.l)*k;
+      if(i<0&&c.a<.02)clouds.delete(id);
+      const dark=[66,70,88],light=[238,232,220];
+      const drift=W_.calm?0:Math.sin(T*.18+c.seed)*6,cy=c.y+(W_.calm?0:Math.sin(T*.3+c.seed)*2);
+      if(isHot&&c.a>.05){
+        /* miękki poblask, żeby ciężka chmura odcinała się od ciemnego nieba */
+        const hl=ctx.createRadialGradient(c.x+drift,cy-c.r*.2,c.r*.3,c.x+drift,cy-c.r*.2,c.r*1.7);
+        hl.addColorStop(0,`rgba(214,206,190,${.2*c.a})`);hl.addColorStop(1,'rgba(214,206,190,0)');
+        ctx.fillStyle=hl;ctx.beginPath();ctx.arc(c.x+drift,cy-c.r*.2,c.r*1.7,0,6.283);ctx.fill();
+      }
+      cloud(c.x+drift,cy,c.r,c.seed,mix(dark,light,c.l),c.a);
+    }
+  }
+  const t_len=s=>Math.min(12,s.length*.25);
+
+  function guideTarget(){
+    const n=stageNo(),m=Math.min(W,H);
+    if(S.screen==='oddech'){
+      const r=clamp(m*.08,34,70);
+      const breath=S.br.step==='breath';
+      return{x:focusX,y:breath?Math.max(H*.22,hudB+70):Math.max(H*.17,hudB+40),r:breath?r*(1+W_.b*(W_.calm?.45:.8)):r*.75};
+    }
+    if(n<0)return{x:focusX,y:Math.max(H*.2,hudB+56),r:clamp(m*.075,30,62)};
+    const r=clamp(m*.042,22,36);
+    return{x:focusX-(n>=3&&S.sit.hotId?Math.min(W*.2,170):0),y:hudB+r+2,r};
+  }
+  function drawGuide(tt,mv){
+    let {x,y,r}=G;
+    r*=1+pulseV*.14;
+    y+=mv?Math.sin(T*.7)*3:0;
+    const col=mix(CALM.guide,TENSE.guide,tt);
+    const R=r*(3+W_.b*1.2+pulseV);
+    const glow=ctx.createRadialGradient(x,y,r*.3,x,y,R);
+    glow.addColorStop(0,rgb(col,.42+W_.b*.2));glow.addColorStop(1,rgb(col,0));ctx.fillStyle=glow;ctx.beginPath();ctx.arc(x,y,R,0,6.283);ctx.fill();
+    ctx.beginPath();
+    const sp=1+tt*1.4;
+    for(let i=0;i<=56;i++){const a=i/56*6.283;const rr=r*(1+mv*(.05*Math.sin(3*a+T*1.1*sp)+.035*Math.sin(5*a-T*1.7*sp)+.02*Math.sin(2*a+T*.5)));
+      const px=x+Math.cos(a)*rr,py=y+Math.sin(a)*rr*(.96+.04*Math.sin(T*.8*mv));i?ctx.lineTo(px,py):ctx.moveTo(px,py);}
+    const body=ctx.createRadialGradient(x-r*.3,y-r*.35,r*.1,x,y,r*1.1);body.addColorStop(0,'rgba(255,250,238,1)');body.addColorStop(1,rgb(col));
+    ctx.fillStyle=body;ctx.fill();
+    const ex=r*.3,ey=y-r*.06,es=r*.075;ctx.fillStyle=ctx.strokeStyle='rgba(14,27,31,.72)';
+    if((S.screen==='oddech'&&S.br.step==='breath')||S.screen==='przerwa'){
+      ctx.lineWidth=Math.max(1.5,r*.045);ctx.lineCap='round';
+      for(const s of[-1,1]){ctx.beginPath();ctx.arc(x+s*ex,ey-es*.6,es*1.3,.2*Math.PI,.8*Math.PI);ctx.stroke();}
+    }else{
+      const bp=T%4.3,open=mv&&bp<.16?Math.abs(bp-.08)/.08:1;
+      for(const s of[-1,1]){ctx.beginPath();ctx.ellipse(x+s*ex,ey,es,Math.max(.6,es*1.25*open),0,0,6.283);ctx.fill();}
+    }
+  }
+  /* obecność terapeuty: miękkie światło przy przewodniku */
+  function drawPresence(mv){
+    if(!S.room)return;
+    const a=T*.35,orb=G.r*1.9;
+    const x=G.x+Math.cos(a)*orb*(mv?1:.9),y=G.y+Math.sin(a)*orb*.45;
+    const rad=G.r*.8*(1+tPulse*.8);
+    const g=ctx.createRadialGradient(x,y,0,x,y,rad);
+    g.addColorStop(0,`rgba(255,244,214,${.6+tPulse*.35})`);g.addColorStop(.35,`rgba(250,226,170,${.22+tPulse*.2})`);g.addColorStop(1,'rgba(250,226,170,0)');
+    ctx.fillStyle=g;ctx.beginPath();ctx.arc(x,y,rad,0,6.283);ctx.fill();
+  }
+
+  function frame(now){
+    const dt=Math.min(.05,(now-last)/1000);
+    const raw=now-last;last=now;T+=dt;
+    if(raw>0&&raw<400){fpsAvg+=((1000/raw)-fpsAvg)*.05;fpsN++;}
+    if(fpsN>120){
+      if(fpsAvg<30){slow++;}else slow=0;
+      if(slow>60){slow=0;if(dprCap>1){dprCap=1;resize();}else if(quality===1){quality=.6;}}
+      if(fpsN%30===0){const f=document.getElementById('fps');if(f){f.textContent=Math.round(fpsAvg);document.getElementById('wpx').textContent=innerWidth;}}
+    }
+    updateBreath(now);
+    const n=stageNo(),mv=W_.calm?0:1;
+    const target=weather();
+    shown+=(target-shown)*(1-Math.exp(-dt*(W_.calm?6:1.6)));
+    const t=shown/100;
+    const camT=n>=0?n:S.screen==='koniec'||S.screen==='pocztowka'?9:cam;
+    cam+=(camT-cam)*(1-Math.exp(-dt*(W_.calm?9:1.15)));
+    pulseV*=Math.exp(-dt*1.6);tPulse*=Math.exp(-dt*1.2);
+
+    const tg=guideTarget(),k=1-Math.exp(-dt*(W_.calm?7:2)),kr=S.screen==='oddech'&&S.br.step==='breath'?1-Math.exp(-dt*14):k;
+    G.x+=(tg.x-G.x)*k;G.y+=(tg.y-G.y)*k;G.r+=(tg.r-G.r)*kr;
+    document.documentElement.style.setProperty('--b',(W_.calm?0:W_.b).toFixed(3));
+
+    const span=W*1.1,camPx=cam*span;
+    const dawn=clamp((cam-6)/3,0,1)*(1-t*.7);
+    const top=mix(mix(CALM.top,TENSE.top,t),[50,76,96],dawn*.6);
+    const mid=mix(mix(CALM.mid,TENSE.mid,t),[116,132,122],dawn*.55);
+    const hor=mix(mix(mix(CALM.hor,TENSE.hor,t),[250,226,184],W_.b*.18),[252,214,160],dawn*.5);
+
+    const g=ctx.createLinearGradient(0,0,0,H);g.addColorStop(0,rgb(top));g.addColorStop(.58,rgb(mid));g.addColorStop(.82,rgb(hor));g.addColorStop(1,rgb(hor));
+    ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+
+    /* gwiazdy, gdy niebo czyste */
+    const sa=clamp(1-t*2.4,0,1)*(1-dawn);
+    if(sa>0){for(const s of stars){const tw=.45+.55*Math.sin(T*.8*mv+s.ph);ctx.fillStyle=`rgba(240,240,225,${sa*tw*.8})`;ctx.fillRect(s.x*W,s.y*H,s.s*1.6,s.s*1.6);}}
+
+    /* blask horyzontu */
+    const sunX=W*.5-((cam*span*.06)%(W*.2));
+    const sun=ctx.createRadialGradient(sunX,H*.8,0,sunX,H*.8,Math.max(W,H)*.6);
+    sun.addColorStop(0,rgb(hor,.32+W_.b*.25+dawn*.2));sun.addColorStop(1,rgb(hor,0));ctx.fillStyle=sun;ctx.fillRect(0,0,W,H);
+
+    /* przejaśnienie: etap myśli alternatywnych */
+    const ray=prox(7)*(S.sit.alt?1:.5)+dawn*.25;
+    if(ray>.02){
+      ctx.save();ctx.translate(focusX,H*.12);
+      for(let i=-3;i<=3;i++){const a=1.57+i*.2+(mv?Math.sin(T*.12+i)*.015:0),len=H*.95;
+        const rg=ctx.createLinearGradient(0,0,Math.cos(a)*len,Math.sin(a)*len);rg.addColorStop(0,`rgba(255,240,205,${.16*ray})`);rg.addColorStop(1,'rgba(255,240,205,0)');
+        ctx.fillStyle=rg;ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(Math.cos(a-.055)*len,Math.sin(a-.055)*len);ctx.lineTo(Math.cos(a+.055)*len,Math.sin(a+.055)*len);ctx.closePath();ctx.fill();}
+      ctx.restore();
+    }
+
+    /* warstwy wzgórz */
+    const hc=mix(CALM.hill,TENSE.hill,t);
+    drawRidge(.14,.66,H*.05,.0026,1.2,rgb(mix(hc,mid,.62)),camPx);
+    drawRidge(.34,.74,H*.04,.0036,4.1,rgb(mix(hc,mid,.38)),camPx);
+
+    /* mgła: rośnie z nasileniem i w dolinie „Sytuacja” */
+    const fog=clamp((t-.28)*.34,0,.3)+prox(1)*.17;
+    if(fog>.01){for(let i=0;i<3;i++){const fx=((i*.37+T*.006*mv*(i+1))%1.4-.2)*W,fy=H*(.5+i*.11),fr=Math.max(W,H)*.45;
+      const fg=ctx.createRadialGradient(fx,fy,0,fx,fy,fr);fg.addColorStop(0,`rgba(190,198,206,${fog})`);fg.addColorStop(1,'rgba(190,198,206,0)');ctx.fillStyle=fg;ctx.fillRect(0,0,W,H);}}
+
+    drawRidge(.62,.81,H*.035,.0052,6.3,rgb(mix(hc,mid,.2)),camPx);
+
+    /* przednia ziemia, ścieżka, miejsca etapów */
+    const foreCol=rgb(hc),dark=rgb(mix(hc,[0,0,0],.25));
+    const ax=i=>i*span+W*(i%2?.11:.89);
+    const sx=wx=>wx-camPx;
+    const vis=i=>{const x=sx(ax(i));return x>-W*.5&&x<W*1.5;};
+
+    if(vis(0)){const x=sx(ax(0));lantern(x,fy(ax(0)),H*.11,.9,dark);lantern(x-H*.13,fy(ax(0)-H*.13),H*.08,.7,dark);}
+    if(vis(1)){const x=sx(ax(1));tree(x,fy(ax(1)),H*.26,dark);tree(x+H*.12,fy(ax(1)+H*.12),H*.18,dark);}
+    if(vis(2)){const x=sx(ax(2));tree(x,fy(ax(2)),H*.3,dark);}
+    if(vis(3)){const x=sx(ax(3));stones(x,fy(ax(3))+4,3,dark,H*.2);}
+    drawRidge(1,FORE[0],H*.03,FORE[2],FORE[3],foreCol,camPx);
+    if(vis(4)){const x=sx(ax(4));lake(x,fy(ax(4))+H*.05,H*.14,top,hor);}
+    if(vis(8)){const x=sx(ax(8));lake(x,fy(ax(8))+H*.05,H*.14,top,hor);}
+    if(vis(5)){const x=sx(ax(5));stones(x,fy(ax(5))+3,Math.min(9,S.sit.pro.length+1),rgb(mix(hc,mid,.55)),H*.13);}
+
+    /* ścieżka i jej rozwidlenie przy argumentach */
+    ctx.save();ctx.setLineDash([3,13]);ctx.lineCap='round';ctx.lineWidth=2.4;ctx.strokeStyle='rgba(242,211,160,.6)';
+    ctx.beginPath();for(let x=0;x<=W;x+=14){const y=fy(x+camPx)+H*.022;x?ctx.lineTo(x,y):ctx.moveTo(x,y);}ctx.stroke();
+    const A=5*span+W*.25,B=6*span+W*.95;
+    if(sx(A)<W&&sx(B)>0){
+      ctx.strokeStyle=`rgba(242,211,160,.62)`;ctx.beginPath();let st=false;
+      for(let x=Math.max(0,sx(A));x<=Math.min(W,sx(B));x+=14){const wx=x+camPx,u=(wx-A)/(B-A),y=fy(wx)+H*.022-Math.sin(Math.PI*u)*H*.052;st?ctx.lineTo(x,y):ctx.moveTo(x,y);st=true;}
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    /* latarnie: każdy argument podważający zapala jedną */
+    const con=S.sit.con.length;
+    if(con&&sx(A)<W*1.4&&sx(B)>-W*.4){
+      for(let i=0;i<Math.min(con,14);i++){
+        const wx=6*span+W*(i%2?.04:.92)+(i%2?1:-1)*i*W*.022,u=(wx-A)/(B-A),uu=clamp(u,0,1);
+        const y=fy(wx)+H*.022-Math.sin(Math.PI*uu)*H*.052;
+        lantern(sx(wx),y,H*.075,.9,dark);
+      }
+    }
+    if(vis(7)){const x=sx(ax(7));tree(x,fy(ax(7)),H*.2,dark);}
+    if(vis(9)){const x=sx(ax(9));for(let i=0;i<4;i++){const wx=ax(9)-i*H*.11;lantern(sx(wx),fy(wx),H*(.1-.012*i),.9,dark);}}
+
+    /* świetliki: gdy nasilenie niskie, przyciąga je wdech */
+    const fa=Math.max(0,1-t*2.2);
+    if(fa>0){const cnt=Math.round(flies.length*quality);for(let i=0;i<cnt;i++){const f=flies[i];
+      if(mv){f.y-=f.v*dt;f.x+=Math.sin(T*.4+f.ph)*.0006;if(f.y<-.02){f.y=.78;f.x=Math.random();}}
+      let px=f.x*W,py=f.y*H;px+=(G.x-px)*W_.b*.14;py+=(G.y-py)*W_.b*.14;
+      const tw=.5+.5*Math.sin(T*1.3*mv+f.ph*3),a=fa*(.25+.6*tw);
+      ctx.fillStyle=`rgba(247,222,170,${a*.18})`;ctx.beginPath();ctx.arc(px,py,f.s*4,0,6.283);ctx.fill();
+      ctx.fillStyle=`rgba(252,236,200,${a})`;ctx.beginPath();ctx.arc(px,py,f.s,0,6.283);ctx.fill();}}
+
+    /* chmury-myśli */
+    syncClouds(n,dt);
+
+    /* deszcz przy najwyższym nasileniu */
+    if(t>.62&&mv){ctx.strokeStyle=`rgba(200,210,222,${(t-.62)*.9})`;ctx.lineWidth=1;ctx.beginPath();
+      const cnt=Math.round(drops.length*quality*(t-.62)/.38);
+      for(let i=0;i<cnt;i++){const d=drops[i];d.y+=d.v*dt;d.x+=d.v*dt*.12;if(d.y>1){d.y=-.05;d.x=Math.random();}
+        const x=d.x*W,y=d.y*H;ctx.moveTo(x,y);ctx.lineTo(x+d.l*H*.12,y+d.l*H);}ctx.stroke();}
+
+    drawPresence(mv);
+    drawGuide(t,mv);
+
+    /* w trybie obok siebie ten sam krajobraz trafia do drugiego widoku */
+    if(isDual()){const o=panes.therapist.querySelector('canvas');const c2=o.getContext('2d',{alpha:false});c2.setTransform(1,0,0,1,0,0);c2.drawImage(cv,0,0,o.width,o.height);}
+
+    Sound.update(W_.b,t);
+    requestAnimationFrame(frame);
+  }
+
+  W_.setCalm=on=>{W_.calm=on;document.documentElement.classList.toggle('calm',on);$('#calmBtn').setAttribute('aria-pressed',String(on));};
+  W_.pulse=()=>{pulseV=1;};
+  W_.therapistPulse=()=>{tPulse=1;};
+  W_.resize=resize;
+  W_.start=()=>{resize();requestAnimationFrame(frame);};
+  return W_;
+})();
+
+/* ===================== START ===================== */
+function layout(){
+  document.body.classList.toggle('dual',isDual());
+  document.documentElement.style.setProperty('--top',$('#topbar').offsetHeight+'px');
+  World.resize();
+}
+addEventListener('resize',layout);
+World.setCalm(matchMedia('(prefers-reduced-motion: reduce)').matches);
+S.screen=(location.hash.replace('#','')&&SCREENS[location.hash.replace('#','')])?location.hash.replace('#',''):'start';
+layout();
+World.start();
+route();
+if(document.fonts&&document.fonts.ready)document.fonts.ready.then(layout);
+</script>
+</body>
+</html>

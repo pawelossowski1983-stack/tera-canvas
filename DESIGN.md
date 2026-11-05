@@ -57,6 +57,7 @@ Spokojny, nowoczesny „żywy krajobraz o zmierzchu”. Jedna pełnoekranowa sce
 | Tekst pomocniczy | `--mist-dim` | `rgba(232,240,236,.7)` |
 | Akcent i fokus (żar) | `--ember` | `#f2d3a0` |
 | Powierzchnia (szkło) | `--glass` | `rgba(12,24,28,.55)` z `backdrop-filter: blur(8–12px)` |
+| Powierzchnia treści (karty z polami i tekstem) | `--glass-strong` | `rgba(12,24,28,.74)`, ciemniejsza od szkła, żeby tekst nad jasnym horyzontem spełniał WCAG AA |
 | Powierzchnia panelu | `--sheet` | `rgba(10,20,23,.92)` |
 | Linia, obrys | `--line` | `rgba(232,240,236,.2)` |
 | Sukces | `--ok` | `#9fd4b0` |
@@ -104,7 +105,9 @@ Kontrast: tekst podstawowy i pomocniczy na `--night` oraz `--night` na `--mist` 
 
 ## Ruch i dostępność
 
-- Przejścia: scena wygasa z rozmyciem i wypływa (`opacity .8s`, `translateY 16px`, `blur 8px`). Czasy mieszczą się w 400–800 ms.
+- Przejścia: scena wygasa z rozmyciem i wypływa (`opacity .5s`, `translateY 16px`, `blur 8px`). Czasy interfejsu mieszczą się w 400–800 ms.
+- Wyjątek od tych czasów: ruch kamery po krajobrazie i zmiana pogody trwają ok. 2–3 s, bo to wolne tło, a nie reakcja interfejsu.
+- Jedyny tekst poniżej 16 px to dyskretna stopka „Prototyp — dane fikcyjne” (13 px).
 - **Tryb spokojny:** wyłącza ruch i rozmycia (przejścia 0.3 s liniowo, bez przesunięć), zatrzymuje deszcz, świetliki i oddychanie sceny, zostawia statyczne światło. Włącza się sam przy `prefers-reduced-motion`, dla osób z lękiem, migreną i zaburzeniami przedsionkowymi.
 - Dźwięk: opcjonalny ambient, domyślnie wyłączony, jeden przycisk.
 - Elementy klikalne minimum 44×44 px, widoczne stany hover, focus i disabled.
